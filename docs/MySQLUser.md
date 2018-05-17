@@ -1,5 +1,5 @@
 # Custom::MySQLUser
-The `Custom::MySQLUser` resource creates a MySQL user with or without a database.
+The `Custom::MySQLUser`resource creates a MySQL user with or without a database.
 
 
 ## Syntax
@@ -23,15 +23,21 @@ Properties:
   ServiceToken: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:binxio-cfn-mysql-provider-vpc-${AppVPC}'
 ```
 
+The password for the user and the database connection can be specified directly (`Password`) or taken from the AWS Parameter Store (`PasswordParameterName`). We recommend
+to always use the Parameter Store.
+
+By default WithDatabase is set to `true`. This means that a database or schema is created with the same name as the user. If you only wish to create a user, specify `false`.
+The RetainPolicy by default is `Retain`. This means that the login to the database is disabled. If you specify drop, it will be dropped and your data will be lost.
+
 ## Properties
 You can specify the following properties:
 
 - `Name` - of the user to create
 - `Password` - of the user 
 - `PasswordParameterName` - name of the ssm parameter containing the password of the user
-- `WithDatabase` - if a database is to be created with the same name, defaults to true
-- `DeletionPolicy` - determines whether the account is locked or the resource is deleted
-    - `Database` - connection information of the database owner
+- `WithDatabase` - if a database is to be created with the same name, defaults to `true`
+- `DeletionPolicy` - determines whether the user is `retained` or the resource is `drop`ped.
+- `Database` - to create the user in
     - `Host` - the database server is listening on.
     - `Port` - port the database server is listening on.
     - `Database` - name to connect to.
