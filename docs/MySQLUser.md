@@ -27,7 +27,10 @@ The password for the user and the database connection can be specified directly 
 to always use the Parameter Store.
 
 By default WithDatabase is set to `true`. This means that a database or schema is created with the same name as the user. If you only wish to create a user, specify `false`.
-The RetainPolicy by default is `Retain`. This means that the login to the database is disabled. If you specify drop, it will be dropped and your data will be lost.
+When the resource is deleted, by default the user account is locked (RetainPolicy set to `Retain`). If you wish to delete the user (and the data), set RetainPolicy to `drop`.
+
+If a user with the same name already exists, the user is "adopted" and it's password is changed. If a database/schema with the same name already exists, the user 
+is granted all permissions on the database.  
 
 ## Properties
 You can specify the following properties:
