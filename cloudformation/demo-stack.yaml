@@ -19,7 +19,7 @@ Resources:
       AllocatedStorage: 10
       DBInstanceClass: db.t2.micro
       Engine: mysql
-      EngineVersion: 9.6.1
+      EngineVersion: 5.7.21
       VPCSecurityGroups:
         - !Ref 'DatabaseSecurityGroup'
       DBName: root
