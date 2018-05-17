@@ -8,11 +8,11 @@ To declare this entity in your AWS CloudFormation template, use the following sy
 ```yaml
 Type: Custom::MySQLUser
 Properties:
-  Name: String
-  Password: String
-  PasswordParameterName: String
-  WithDatabase: true/false
-  DeletionPolicy: Retain/Drop
+  Name: STRING
+  Password: STRING
+  PasswordParameterName: STRING
+  WithDatabase: true|false
+  DeletionPolicy: 'Retain'|'Drop'
   Database:
     Host: STRING
     Port: INTEGER
