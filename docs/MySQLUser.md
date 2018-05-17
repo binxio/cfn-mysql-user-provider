@@ -29,8 +29,8 @@ to always use the Parameter Store.
 By default WithDatabase is set to `true`. This means that a database or schema is created with the same name as the user. If you only wish to create a user, specify `false`.
 When the resource is deleted, by default the user account is locked (RetainPolicy set to `Retain`). If you wish to delete the user (and the data), set RetainPolicy to `drop`.
 
-If a user with the same name already exists, the user is "adopted" and it's password is changed. If a database/schema with the same name already exists, the user 
-is granted all permissions on the database.  
+If a user with the same name already exists, the user is "adopted" and it's password is changed. If `WithDatabase` is specified and a database/schema with the same name 
+already exists, the user is granted all permissions on the database.  
 
 ## Properties
 You can specify the following properties:
