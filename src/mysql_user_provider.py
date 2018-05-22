@@ -305,6 +305,7 @@ class MySQLUser(ResourceProvider):
     def delete(self):
         if self.physical_resource_id == 'could-not-create':
             self.success('user was never created')
+            return
 
         try:
             self.connect()
