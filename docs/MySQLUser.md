@@ -32,6 +32,8 @@ When the resource is deleted, by default the user account is locked (RetainPolic
 If a user with the same name already exists, the user is "adopted" and it's password is changed. If `WithDatabase` is specified and a database/schema with the same name 
 already exists, the user is granted all permissions on the database.  
 
+For MySQL versions below 5.7, the provider locks the user out be generating a random password.
+
 ## Properties
 You can specify the following properties:
 

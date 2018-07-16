@@ -1,4 +1,4 @@
-import sys
+import pytest
 import uuid
 import mysql.connector
 import boto3
@@ -7,8 +7,10 @@ from mysql_user_provider import handler, request_schema
 
 logging.basicConfig(level=logging.INFO)
 
+
 def nothing(self):
     return self
+
 
 def close_it(self, exception_type, exception_value, callback):
     self.close()
@@ -17,9 +19,10 @@ def close_it(self, exception_type, exception_value, callback):
 mysql.connector.CMySQLConnection.__enter__ = nothing
 mysql.connector.CMySQLConnection.__exit__ = close_it
 
+
 class Event(dict):
 
-    def __init__(self, request_type, user, physical_resource_id=None, with_database=False):
+    def __init__(self, request_type, user, physical_resource_id=None, port=None, with_database=False):
         self.update({
             'RequestType': request_type,
             'ResponseURL': 'https://httpbin.org/put',
@@ -30,7 +33,7 @@ class Event(dict):
             'ResourceProperties': {
                 'User': user, 'Password': 'password', 'WithDatabase': with_database,
                 'Database': {'User': 'root', 'Password': 'password', 'Host': 'localhost',
-                              'Port': 6033, 'DBName': 'mysql'}
+                              'Port': port, 'DBName': 'mysql'}
             }})
         if physical_resource_id is not None:
             self['PhysicalResourceId'] = physical_resource_id
@@ -56,16 +59,21 @@ class Event(dict):
             raise
         return result
 
-def test_invalid_user_name():
-    event = Event('Create', 'a-user', with_database=False)
+database_ports = [6033, 7033]
+
+
+@pytest.mark.parametrize("database_port", database_ports)
+def test_invalid_user_name(database_port):
+    event = Event('Create', 'a-user', with_database=False, port=database_port)
     response = handler(event, {})
     assert response['Status'] == 'FAILED', response['Reason']
 
 
-def test_password_with_special_chars():
-    name = 'u%s' % str(uuid.uuid4()).replace('-', '')[:30]
-    event = Event('Create', name, with_database=False)
-    event['ResourceProperties']['Password'] =  "abd'\efg~"
+@pytest.mark.parametrize("database_port", database_ports)
+def test_password_with_special_chars(database_port):
+    name = 'u%s' % str(uuid.uuid4()).replace('-', '')[:14]
+    event = Event('Create', name, with_database=False, port=database_port)
+    event['ResourceProperties']['Password'] = "abd'\efg~"
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
@@ -76,35 +84,37 @@ def test_password_with_special_chars():
     physical_resource_id = response['PhysicalResourceId']
 
     # delete the created user
-    event = Event('Delete', name, physical_resource_id)
+    event = Event('Delete', name, physical_resource_id, port=database_port)
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
-def test_create_user():
+
+@pytest.mark.parametrize("database_port", database_ports)
+def test_create_user(database_port):
     # create a test user
-    name = 'u%s' % str(uuid.uuid4()).replace('-', '')[:30]
-    event = Event('Create', name, with_database=False)
+    name = 'u%s' % str(uuid.uuid4()).replace('-', '')[:14]
+    event = Event('Create', name, port=database_port, with_database=False)
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
     assert 'PhysicalResourceId' in response
     physical_resource_id = response['PhysicalResourceId']
-    expect_id = 'mysql:localhost:6033:mysql::%(name)s' % {'name': name}
+    expect_id = 'mysql:localhost:%(port)d:mysql::%(name)s' % {'name': name, 'port': database_port}
     assert physical_resource_id == expect_id, 'expected %s, got %s' % (expect_id, physical_resource_id)
 
     with event.test_user_connection() as connection:
         pass
 
-    event = Event('Create', name, with_database=True)
+    event = Event('Create', name, port=database_port, with_database=True)
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', '%s' % response['Reason']
 
     # delete non existing user
-    event = Event('Delete', name + "-", physical_resource_id + '-')
+    event = Event('Delete', name + "-", physical_resource_id + '-', port=database_port)
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
     # delete the created user
-    event = Event('Delete', name, physical_resource_id)
+    event = Event('Delete', name, physical_resource_id, port=database_port)
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
@@ -114,35 +124,39 @@ def test_create_user():
     except:
         pass
 
-    event = Event('Delete', name, physical_resource_id, with_database=True)
+    event = Event('Delete', name, physical_resource_id, with_database=True, port=database_port)
     event['ResourceProperties']['DeletionPolicy'] = 'Drop'
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
 
-def test_update_password():
+@pytest.mark.parametrize("database_port", database_ports)
+def test_update_password(database_port):
     # create a test database
-    name = 'u%s' % str(uuid.uuid4()).replace('-', '')[:30]
-    event = Event('Create', name, with_database=True)
+    name = 'u%s' % str(uuid.uuid4()).replace('-', '')[:14]
+    event = Event('Create', name, with_database=True, port=database_port)
     event['DeletionPolicy'] = 'Drop'
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', '%s' % response['Reason']
     assert 'PhysicalResourceId' in response
     physical_resource_id = response['PhysicalResourceId']
-    expect_id = 'mysql:localhost:6033:mysql:%(name)s:%(name)s' % {'name': name}
+    expect_id = 'mysql:localhost:%(port)d:mysql:%(name)s:%(name)s' % {'name': name, 'port': database_port}
     assert physical_resource_id == expect_id, 'expected %s, got %s' % (expect_id, physical_resource_id)
 
     # update the password
-    event = Event('Update', name, physical_resource_id, with_database=True)
+    event = Event('Update', name, physical_resource_id, with_database=True, port=database_port)
     event['Password'] = 'geheim'
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
-    with event.test_user_connection() as connection:
-        pass
+    try:
+        with event.test_user_connection() as connection:
+            pass
+    except Exception as e:
+        assert False, 'password change failed, {}'.format(e)
 
     # update the user is not possible
-    event = Event('Update', name + '-', physical_resource_id, with_database=True)
+    event = Event('Update', name + '-', physical_resource_id, with_database=True, port=database_port)
     response = handler(event, {})
     assert response['Status'] == 'FAILED', response['Reason']
 
@@ -154,15 +168,16 @@ def test_update_password():
     assert response['Status'] == 'SUCCESS', response['Reason']
 
 
-def test_create_database():
+@pytest.mark.parametrize("database_port", database_ports)
+def test_create_database(database_port):
     # create a test database
-    name = 'u%s' % str(uuid.uuid4()).replace('-', '')[:30]
-    event = Event('Create', name, with_database=True)
+    name = 'u%s' % str(uuid.uuid4()).replace('-', '')[:14]
+    event = Event('Create', name, with_database=True, port=database_port)
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', '%s' % response['Reason']
     assert 'PhysicalResourceId' in response
     physical_resource_id = response['PhysicalResourceId']
-    expect_id = 'mysql:localhost:6033:mysql:%(name)s:%(name)s' % {'name': name}
+    expect_id = 'mysql:localhost:%(port)d:mysql:%(name)s:%(name)s' % {'name': name, 'port': database_port}
     assert physical_resource_id == expect_id, 'expected %s, got %s' % (expect_id, physical_resource_id)
 
     # create the database again
@@ -170,12 +185,12 @@ def test_create_database():
     assert response['Status'] == 'SUCCESS', '%s' % response['Reason']
 
     # delete non existing database
-    event = Event('Delete', name + "-", physical_resource_id + '-')
+    event = Event('Delete', name + "-", physical_resource_id + '-', port=database_port)
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
     # drop the login to the database
-    event = Event('Delete', name, physical_resource_id, with_database=True)
+    event = Event('Delete', name, physical_resource_id, with_database=True, port=database_port)
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
@@ -195,7 +210,7 @@ def test_create_database():
             cursor.close()
 
     # drop the database
-    event = Event('Delete', name, physical_resource_id, with_database=True)
+    event = Event('Delete', name, physical_resource_id, with_database=True, port=database_port)
     event['ResourceProperties']['DeletionPolicy'] = 'Drop'
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
@@ -209,23 +224,28 @@ def test_create_database():
         finally:
             cursor.close()
 
-def test_invalid_delete():
-    event = Event('Delete', "noop", 'mysql:localhost:6033:mysql:%(name)s:%(name)s' % {'name': 'noop'})
+
+@pytest.mark.parametrize("database_port", database_ports)
+def test_invalid_delete(database_port):
+    event = Event('Delete', "noop", 'mysql:localhost:%(port)d:mysql:%(name)s:%(name)s' %
+                  {'port': database_port, 'name': 'noop'}, port=database_port)
     del event['ResourceProperties']['User']
     response = handler(event, {})
-    assert response['Status'] == 'SUCCESS', response['Reason']
+    assert response['Status'] == 'SUCCESS', response['Reason'] \
 
 
-def test_password_parameter_use():
+
+@pytest.mark.parametrize("database_port", database_ports)
+def test_password_parameter_use(database_port):
     ssm = boto3.client('ssm')
     uuid_string = str(uuid.uuid4()).replace('-', '')
-    name = ('test%s' % uuid_string)[:30]
+    name = ('test%s' % uuid_string)[:14]
     user_password_name = 'test-user-%s' % uuid_string
     dbowner_password_name = 'test-owner-%s' % uuid_string
     try:
-        event = Event('Create', name)
+        event = Event('Create', name, port=database_port)
 
-        user_password = str(uuid.uuid4())[:30]
+        user_password = str(uuid.uuid4())[:14]
         del event['ResourceProperties']['Password']
         event['ResourceProperties']['PasswordParameterName'] = user_password_name
 

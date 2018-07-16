@@ -1,6 +1,9 @@
 import logging
 
+import random
+import string
 import boto3
+from hashlib import sha1
 import mysql.connector
 from botocore.exceptions import ClientError
 from cfn_resource_provider import ResourceProvider
@@ -83,6 +86,19 @@ request_schema = {
         }
     }
 }
+
+
+def mysql_password(passwd):
+    """
+    Hash string twice with SHA1 and return uppercase hex digest,
+    prepended with an asterix.
+
+    This function is identical to the MySQL PASSWORD() function.
+    """
+    pass1 = sha1(passwd.encode('utf-8')).digest()
+    pass2 = sha1(pass1).hexdigest()
+    return "*" + pass2.upper()
+
 
 class MySQLUser(ResourceProvider):
 
@@ -209,8 +225,14 @@ class MySQLUser(ResourceProvider):
                 log.info('drop user %s', self.user)
                 cursor.execute('DROP USER %s', [self.user])
             else:
-                log.info('disable login of %s', self.user)
-                cursor.execute("ALTER USER %s ACCOUNT LOCK", [self.user])
+                if self.is_5_7_or_higher():
+                    log.info('disable login of %s', self.user)
+                    cursor.execute("ALTER USER %s ACCOUNT LOCK", [self.user])
+                else:
+                    log.info('set random password for %s to disable login', self.user)
+                    cursor.execute("SET PASSWORD FOR %s = %s", [
+                        self.user,
+                        mysql_password(''.join(random.choices(string.ascii_uppercase + string.digits, k=16)))])
         finally:
             cursor.close()
 
@@ -225,12 +247,28 @@ class MySQLUser(ResourceProvider):
         else:
             log.info('not dropping database %s', self.mysql_user)
 
+    def is_5_7_or_higher(self):
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute('select version()')
+            version = cursor.fetchone()[0].split('.')
+            return int(version[0]) >= 5 and int(version[1]) >= 7
+        except Exception as e:
+            self.fail('failed to determine database version, {}'.format(e))
+            raise e
+        finally:
+            cursor.close()
+
     def update_password(self):
         log.info('update password of user %s', self.user)
         cursor = self.connection.cursor()
         try:
-            cursor.execute("ALTER USER %s IDENTIFIED BY %s ACCOUNT UNLOCK", [
-                self.user, self.user_password])
+            if self.is_5_7_or_higher():
+                cursor.execute("ALTER USER %s IDENTIFIED BY %s ACCOUNT UNLOCK", [
+                    self.user, self.user_password])
+            else:
+                cursor.execute("SET PASSWORD FOR %s = %s", [
+                    self.user, mysql_password(self.user_password)])
         finally:
             cursor.close()
 
@@ -256,7 +294,8 @@ class MySQLUser(ResourceProvider):
         log.info('grant ownership on %s to %s', self.user, self.user)
         cursor = self.connection.cursor()
         try:
-            cursor.execute("GRANT ALL ON %s.* TO '%s'@'%s' WITH GRANT OPTION" % (self.mysql_user, self.mysql_user, self.mysql_user_host))
+            cursor.execute("GRANT ALL ON %s.* TO '%s'@'%s' WITH GRANT OPTION" %
+                           (self.mysql_user, self.mysql_user, self.mysql_user_host))
         finally:
             cursor.close()
 
