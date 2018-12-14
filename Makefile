@@ -19,7 +19,7 @@ help:
 	@echo 'make demo            - deploys the provider and the demo cloudformation stack.'
 	@echo 'make delete-demo     - deletes the demo cloudformation stack.'
 
-deploy:
+deploy: target/$(NAME)-$(VERSION).zip
 	aws s3 --region $(AWS_REGION) \
 		cp --acl \
 		public-read target/$(NAME)-$(VERSION).zip \
