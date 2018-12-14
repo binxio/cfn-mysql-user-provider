@@ -1,10 +1,11 @@
 include Makefile.mk
 
 NAME=cfn-mysql-user-provider
-
 AWS_REGION=eu-central-1
+S3_BUCKET_PREFIX=binxio-public
+S3_BUCKET=$(S3_BUCKET_PREFIX)-$(AWS_REGION)
+
 ALL_REGIONS=$(shell printf "import boto3\nprint '\\\n'.join(map(lambda r: r['RegionName'], boto3.client('ec2').describe_regions()['Regions']))\n" | python | grep -v '^$(AWS_REGION)$$')
-S3_BUCKET=binxio-public-$(AWS_REGION)
 
 help:
 	@echo 'make                 - builds a zip file to target/.'
@@ -18,50 +19,36 @@ help:
 
 deploy:
 	aws s3 --region $(AWS_REGION) \
-		cp target/$(NAME)-$(VERSION).zip \
+		cp --acl \
+		public-read target/$(NAME)-$(VERSION).zip \
 		s3://$(S3_BUCKET)/lambdas/$(NAME)-$(VERSION).zip 
 	aws s3 --region $(AWS_REGION) \
-		cp \
+		cp --acl public-read \
 		s3://$(S3_BUCKET)/lambdas/$(NAME)-$(VERSION).zip \
 		s3://$(S3_BUCKET)/lambdas/$(NAME)-latest.zip 
-	aws s3api --region $(AWS_REGION) \
-		put-object-acl --bucket $(S3_BUCKET) \
-		--acl public-read --key lambdas/$(NAME)-$(VERSION).zip 
-	aws s3api --region $(AWS_REGION) \
-		put-object-acl --bucket $(S3_BUCKET) \
-		--acl public-read --key lambdas/$(NAME)-latest.zip 
 	@for REGION in $(ALL_REGIONS); do \
 		echo "copying to region $$REGION.." ; \
 		aws s3 --region $(AWS_REGION) \
-			cp  \
-			s3://binxio-public-$(AWS_REGION)/lambdas/$(NAME)-$(VERSION).zip \
-			s3://binxio-public-$$REGION/lambdas/$(NAME)-$(VERSION).zip; \
+			cp --acl public-read \
+			s3://$(S3_BUCKET_PREFIX)-$(AWS_REGION)/lambdas/$(NAME)-$(VERSION).zip \
+			s3://$(S3_BUCKET_PREFIX)-$$REGION/lambdas/$(NAME)-$(VERSION).zip; \
 		aws s3 --region $$REGION \
-			cp  \
-			s3://binxio-public-$$REGION/lambdas/$(NAME)-$(VERSION).zip \
-			s3://binxio-public-$$REGION/lambdas/$(NAME)-latest.zip; \
-		aws s3api --region $$REGION \
-			put-object-acl --bucket binxio-public-$$REGION \
-			--acl public-read --key lambdas/$(NAME)-$(VERSION).zip; \
-		aws s3api --region $$REGION \
-			put-object-acl --bucket binxio-public-$$REGION \
-			--acl public-read --key lambdas/$(NAME)-latest.zip; \
+			cp  --acl public-read \
+			s3://$(S3_BUCKET_PREFIX)-$$REGION/lambdas/$(NAME)-$(VERSION).zip \
+			s3://$(S3_BUCKET_PREFIX)-$$REGION/lambdas/$(NAME)-latest.zip; \
 	done
 
 do-push: deploy
 
-do-build: local-build
+do-build: target/$(NAME)-$(VERSION).zip
 
-local-build: src/*.py venv requirements.txt
-	mkdir -p target/content 
-	cp requirements.txt target/content
-	docker run -v $(PWD)/target/content:/venv --workdir /venv python:3.6 pip install --quiet -t . -r requirements.txt
-	docker run -v $(PWD)/target/content:/venv --workdir /venv python:3.6 python -m compileall -q -f .
-	cp -r src/* target/content
-	find target/content -print0 -type d | xargs -0 chmod ugo+rx
-	find target/content -print0 -type f | xargs -0 chmod ugo+r 
-	cd target/content && zip --quiet -9r ../../target/$(NAME)-$(VERSION).zip  *
-	chmod ugo+r target/$(NAME)-$(VERSION).zip
+target/$(NAME)-$(VERSION).zip: src/*.py requirements.txt
+	mkdir -p target
+	docker build --build-arg ZIPFILE=$(NAME)-$(VERSION).zip -t $(NAME)-lambda:$(VERSION) -f Dockerfile.lambda . && \
+		ID=$$(docker create $(NAME)-lambda:$(VERSION) /bin/true) && \
+		docker export $$ID | (cd target && tar -xvf - $(NAME)-$(VERSION).zip) && \
+		docker rm -f $$ID && \
+		chmod ugo+r target/$(NAME)-$(VERSION).zip
 
 venv: requirements.txt
 	virtualenv -p python3 venv  && \
