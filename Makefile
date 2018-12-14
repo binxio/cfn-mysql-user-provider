@@ -12,6 +12,8 @@ help:
 	@echo 'make release         - builds a zip file and deploys it to s3.'
 	@echo 'make clean           - the workspace.'
 	@echo 'make test            - execute the tests, requires a working AWS connection.'
+	@echo 'make deploy	    - lambda to bucket $(S3_BUCKET)'
+	@echo 'make deploy-all-regions - lambda to all regions with bucket prefix $(S3_BUCKET_PREFIX)'
 	@echo 'make deploy-provider - deploys the provider.'
 	@echo 'make delete-provider - deletes the provider.'
 	@echo 'make demo            - deploys the provider and the demo cloudformation stack.'
@@ -26,6 +28,8 @@ deploy:
 		cp --acl public-read \
 		s3://$(S3_BUCKET)/lambdas/$(NAME)-$(VERSION).zip \
 		s3://$(S3_BUCKET)/lambdas/$(NAME)-latest.zip 
+
+deploy-all-regions: deploy
 	@for REGION in $(ALL_REGIONS); do \
 		echo "copying to region $$REGION.." ; \
 		aws s3 --region $(AWS_REGION) \
