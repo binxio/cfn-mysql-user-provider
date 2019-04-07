@@ -12,7 +12,7 @@ It is quite easy: you specify a CloudFormation resource of the [Custom::MySQLUse
     Type: Custom::MySQLUser
     DependsOn: KongPassword
     Properties:
-      Name: kong
+      User: kong
       PasswordParameterName: /MySQL/kong/PGPASSWORD
       WithDatabase: true
       DeletionPolicy: Retain 
