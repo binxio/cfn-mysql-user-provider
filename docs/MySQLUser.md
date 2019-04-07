@@ -8,7 +8,7 @@ To declare this entity in your AWS CloudFormation template, use the following sy
 ```yaml
 Type: Custom::MySQLUser
 Properties:
-  Name: STRING
+  User: STRING
   Password: STRING
   PasswordParameterName: STRING
   WithDatabase: true|false
@@ -37,7 +37,7 @@ For MySQL versions below 5.7, the provider locks the user out be generating a ra
 ## Properties
 You can specify the following properties:
 
-- `Name` - of the user to create
+- `User` - to create
 - `Password` - of the user 
 - `PasswordParameterName` - name of the ssm parameter containing the password of the user
 - `WithDatabase` - if a database is to be created with the same name, defaults to `true`
