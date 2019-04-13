@@ -52,7 +52,7 @@ export SG_ID=$(aws ec2 --output text --query "SecurityGroups[*].GroupId" \
 aws cloudformation create-stack \
 	--capabilities CAPABILITY_IAM \
 	--stack-name cfn-mysql-user-provider \
-	--template-body file://cloudformation/cfn-custom-resource-provider.json  \
+	--template-body file://cloudformation/cfn-custom-resource-provider.yaml  \
 	--parameters \
 	            ParameterKey=VPC,ParameterValue=$VPC_ID \
 	            ParameterKey=Subnet,ParameterValue=$SUBNET_ID \
@@ -74,7 +74,7 @@ cd cfn-secret-provider
 aws cloudformation create-stack \
 	--capabilities CAPABILITY_IAM \
 	--stack-name cfn-secret-provider \
-	--template-body file://cloudformation/cfn-custom-resource-provider.json 
+	--template-body file://cloudformation/cfn-custom-resource-provider.yaml
 aws cloudformation wait stack-create-complete  --stack-name cfn-secret-provider 
 
 ```
@@ -85,7 +85,7 @@ To install the simple sample of the Custom Resource, type:
 
 ```sh
 aws cloudformation create-stack --stack-name cfn-mysql-user-provider-demo \
-	--template-body file://cloudformation/demo-stack.json
+	--template-body file://cloudformation/demo-stack.yaml
 aws cloudformation wait stack-create-complete  --stack-name cfn-mysql-user-provider-demo
 ```
 It will create a MySQL database too, so it is quite time consuming...
