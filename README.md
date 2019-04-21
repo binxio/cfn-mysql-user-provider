@@ -44,19 +44,19 @@ To install this Custom Resource, type:
 
 ```sh
 export VPC_ID=$(aws ec2  --output text --query 'Vpcs[?IsDefault].VpcId' describe-vpcs)
-export SUBNET_ID=$(aws ec2 --output text --query Subnets[0].SubnetId \
+export SUBNET_ID=$(aws ec2 --output text --query 'Subnets[0].SubnetId' \
 			describe-subnets --filters Name=vpc-id,Values=$VPC_ID)
-export SG_ID=$(aws ec2 --output text --query "SecurityGroups[*].GroupId" \
+export SG_ID=$(aws ec2 --output text --query 'SecurityGroups[*].GroupId' \
 			describe-security-groups --group-names default  --filters Name=vpc-id,Values=$VPC_ID)
 
 aws cloudformation create-stack \
 	--capabilities CAPABILITY_IAM \
 	--stack-name cfn-mysql-user-provider \
-	--template-body file://cloudformation/cfn-custom-resource-provider.yaml  \
+	--template-body file://cloudformation/cfn-resource-provider.yaml  \
 	--parameters \
 	            ParameterKey=VPC,ParameterValue=$VPC_ID \
-	            ParameterKey=Subnet,ParameterValue=$SUBNET_ID \
-                ParameterKey=SecurityGroup,ParameterValue=$SG_ID
+	            ParameterKey=Subnets,ParameterValue=$SUBNET_ID \
+                    ParameterKey=SecurityGroup,ParameterValue=$SG_ID
 
 aws cloudformation wait stack-create-complete  --stack-name cfn-mysql-user-provider 
 ```
