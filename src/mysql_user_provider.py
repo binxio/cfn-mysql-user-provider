@@ -9,6 +9,7 @@ from botocore.exceptions import ClientError
 from cfn_resource_provider import ResourceProvider
 
 log = logging.getLogger()
+log.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 request_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
