@@ -65,7 +65,7 @@ Resources:
           - UsePublicBucket
           - !Sub 'binxio-public-${AWS::Region}'
           - !Ref 'LambdaS3Bucket'
-        S3Key: lambdas/cfn-mysql-user-provider-0.2.2.zip
+        S3Key: lambdas/cfn-mysql-user-provider-0.2.3.zip
       VpcConfig:
         SecurityGroupIds:
           - !Ref 'SecurityGroup'
