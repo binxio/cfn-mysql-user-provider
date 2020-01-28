@@ -17,7 +17,8 @@ request_schema = {
     "type": "object",
     "oneOf": [
         {"required": ["Database", "User", "Password"]},
-        {"required": ["Database", "User", "PasswordParameterName"]}
+        {"required": ["Database", "User", "PasswordParameterName"]},
+        {"required": ["Database", "User", "PasswordSecretName"]}
     ],
     "properties": {
         "Database": {"$ref": "#/definitions/connection"},
@@ -37,6 +38,11 @@ request_schema = {
             "minLength": 1,
             "description": "the name of the password in the Parameter Store."
         },
+        "PasswordSecretName": {
+            "type": "string",
+            "minLength": 1,
+            "description": "the name of the password in the Secret Manager."
+        },
         "WithDatabase": {
             "type": "boolean",
             "default": True,
@@ -53,7 +59,8 @@ request_schema = {
             "type": "object",
             "oneOf": [
                 {"required": ["DBName", "Host", "Port", "User", "Password"]},
-                {"required": ["DBName", "Host", "Port", "User", "PasswordParameterName"]}
+                {"required": ["DBName", "Host", "Port", "User", "PasswordParameterName"]},
+                {"required": ["DBName", "Host", "Port", "User", "PasswordSecretName"]}
             ],
             "properties": {
                 "DBName": {
@@ -83,6 +90,10 @@ request_schema = {
                 "PasswordParameterName": {
                     "type": "string",
                     "description": "the name of the database owner password in the Parameter Store."
+                },
+                "PasswordSecretName": {
+                    "type": "string",
+                    "description": "the name of the database owner password in the Secrets Manager."
                 }
             }
         }
@@ -107,6 +118,7 @@ class MySQLUser(ResourceProvider):
     def __init__(self):
         super(MySQLUser, self).__init__()
         self.ssm = boto3.client('ssm')
+        self.secretsmanager = boto3.client('secretsmanager')
         self.connection = None
         self.request_schema = request_schema
 
@@ -115,8 +127,12 @@ class MySQLUser(ResourceProvider):
 
     def get_password(self, name):
         try:
-            response = self.ssm.get_parameter(Name=name, WithDecryption=True)
-            return response['Parameter']['Value']
+            if 'PasswordParameterName' in self.properties:
+                response = self.ssm.get_parameter(Name=name, WithDecryption=True)
+                return response['Parameter']['Value']
+            else: 
+                response = self.secretsmanager.get_secret_value(SecretId=name)
+                return response['SecretString']
         except ClientError as e:
             raise ValueError('Could not obtain password using name {}, {}'.format(name, e))
 
@@ -124,16 +140,20 @@ class MySQLUser(ResourceProvider):
     def user_password(self):
         if 'Password' in self.properties:
             return self.get('Password')
-        else:
+        elif 'PasswordParameterName' in self.properties:
             return self.get_password(self.get('PasswordParameterName'))
+        else:
+            return self.get_password(self.get('PasswordSecretName'))
 
     @property
     def dbowner_password(self):
         db = self.get('Database')
         if 'Password' in db:
             return db.get('Password')
-        else:
+        elif 'PasswordParameterName' in db:
             return self.get_password(db['PasswordParameterName'])
+        else:
+            return self.get_password(db['PasswordSecretName'])
 
     @property
     def user(self):
@@ -362,3 +382,4 @@ provider = MySQLUser()
 
 def handler(request, context):
     return provider.handle(request, context)
+    

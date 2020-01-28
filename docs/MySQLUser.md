@@ -11,6 +11,7 @@ Properties:
   User: STRING
   Password: STRING
   PasswordParameterName: STRING
+  PasswordSecretName: STRING
   WithDatabase: true|false
   DeletionPolicy: 'Retain'|'Drop'
   Database:
@@ -20,11 +21,12 @@ Properties:
     User: STRING
     Password: STRING
     PasswordParameterName: STRING
+    PasswordSecretName: STRING
   ServiceToken: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:binxio-cfn-mysql-provider-vpc-${AppVPC}'
 ```
 
-The password for the user and the database connection can be specified directly (`Password`) or taken from the AWS Parameter Store (`PasswordParameterName`). We recommend
-to always use the Parameter Store.
+The password for the user and the database connection can be specified directly (`Password`), taken from the AWS Parameter Store (`PasswordParameterName`) or taken from the AWS Secrets Manager (`PasswordSecretName`). We recommend
+to always use either the Parameter Store or the Secrets Manager.
 
 By default WithDatabase is set to `true`. This means that a database or schema is created with the same name as the user. If you only wish to create a user, specify `false`.
 When the resource is deleted, by default the user account is locked (RetainPolicy set to `Retain`). If you wish to delete the user (and the data), set RetainPolicy to `drop`.
@@ -40,6 +42,7 @@ You can specify the following properties:
 - `User` - to create
 - `Password` - of the user 
 - `PasswordParameterName` - name of the ssm parameter containing the password of the user
+- `PasswordSecretName` - friendly name or the ARN of the secret in secrets manager containing the password of the user
 - `WithDatabase` - if a database is to be created with the same name, defaults to `true`
 - `DeletionPolicy` - determines whether the user is `retained` or the resource is `drop`ped.
 - `Database` - to create the user in
@@ -49,8 +52,9 @@ You can specify the following properties:
     - `User` - name of the database owner.
     - `Password` - to identify the user with. 
     - `PasswordParameterName` - name of the ssm parameter containing the password of the user
+    - `PasswordSecretName` - friendly name or the ARN of the secret in secrets manager containing the password of the user
 
-Either `Password` or `PasswordParameterName` is required.
+Either `Password`, `PasswordParameterName` or `PasswordSecretName` is required.
 
 ## Return values
 There are no return values from this resources.

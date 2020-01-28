@@ -27,6 +27,7 @@ Resources:
           - Effect: Allow
             Action:
               - ssm:GetParameter
+              - secretsmanager:GetSecretValue
             Resource:
               - '*'
           - Effect: Allow
