@@ -1,5 +1,4 @@
 import logging
-import os
 
 import random
 import string
@@ -7,11 +6,12 @@ import boto3
 from hashlib import sha1
 import mysql.connector
 from botocore.exceptions import ClientError
-from cfn_resource_provider import ResourceProvider
+
+from cfn_mysql_user_provider.mysql_database_provider import MySQLDatabaseProvider
 
 log = logging.getLogger()
-log.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
+request_resource = 'Custom::MySQLUser'
 request_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type": "object",
@@ -113,47 +113,23 @@ def mysql_password(passwd):
     return "*" + pass2.upper()
 
 
-class MySQLUser(ResourceProvider):
+class MySQLUserProvider(MySQLDatabaseProvider):
 
     def __init__(self):
-        super(MySQLUser, self).__init__()
-        self.ssm = boto3.client('ssm')
-        self.secretsmanager = boto3.client('secretsmanager')
-        self.connection = None
+        super(MySQLUserProvider, self).__init__()
         self.request_schema = request_schema
 
     def convert_property_types(self):
         self.heuristic_convert_property_types(self.properties)
-
-    def get_password(self, name):
-        try:
-            if 'PasswordParameterName' in self.properties:
-                response = self.ssm.get_parameter(Name=name, WithDecryption=True)
-                return response['Parameter']['Value']
-            else: 
-                response = self.secretsmanager.get_secret_value(SecretId=name)
-                return response['SecretString']
-        except ClientError as e:
-            raise ValueError('Could not obtain password using name {}, {}'.format(name, e))
 
     @property
     def user_password(self):
         if 'Password' in self.properties:
             return self.get('Password')
         elif 'PasswordParameterName' in self.properties:
-            return self.get_password(self.get('PasswordParameterName'))
+            return self.get_ssm_password(self.get('PasswordParameterName'))
         else:
-            return self.get_password(self.get('PasswordSecretName'))
-
-    @property
-    def dbowner_password(self):
-        db = self.get('Database')
-        if 'Password' in db:
-            return db.get('Password')
-        elif 'PasswordParameterName' in db:
-            return self.get_password(db['PasswordParameterName'])
-        else:
-            return self.get_password(db['PasswordSecretName'])
+            return self.get_sm_password(self.get('PasswordSecretName'))
 
     @property
     def user(self):
@@ -169,33 +145,12 @@ class MySQLUser(ResourceProvider):
         return parts[1] if len(parts) > 1 else '%'
 
     @property
-    def host(self):
-        return self.get('Database', {}).get('Host', None)
-
-    @property
-    def port(self):
-        return self.get('Database', {}).get('Port', 3306)
-
-    @property
-    def dbname(self):
-        return self.get('Database', {}).get('DBName', 'mysql')
-
-    @property
-    def dbowner(self):
-        return self.get('Database', {}).get('User', None)
-
-    @property
     def with_database(self):
-        return self.get('WithDatabase', False)
+        return self.get('WithDatabase', True)
 
     @property
     def deletion_policy(self):
         return self.get('DeletionPolicy')
-
-    @property
-    def connect_info(self):
-        return {'host': self.host, 'port': self.port, 'database': self.dbname,
-                'user': self.dbowner, 'password': self.dbowner_password}
 
     @property
     def allow_update(self):
@@ -207,18 +162,6 @@ class MySQLUser(ResourceProvider):
             return 'mysql:%s:%s:%s:%s:%s' % (self.host, self.port, self.dbname, self.mysql_user, self.user)
         else:
             return 'mysql:%s:%s:%s::%s' % (self.host, self.port, self.dbname, self.user)
-
-    def connect(self):
-        log.info('connecting to database %s on port %d as user %s', self.host, self.port, self.dbowner)
-        try:
-            self.connection = mysql.connector.connect(**self.connect_info)
-        except Exception as e:
-            raise ValueError('Failed to connect, %s' % e)
-
-    def close(self):
-        if self.connection:
-            self.connection.close()
-            self.connection = None
 
     def db_exists(self):
         cursor = self.connection.cursor()
@@ -376,8 +319,10 @@ class MySQLUser(ResourceProvider):
         finally:
             self.close()
 
+    def is_supported_resource_type(self):
+        return self.resource_type == request_resource
 
-provider = MySQLUser()
+provider = MySQLUserProvider()
 
 
 def handler(request, context):

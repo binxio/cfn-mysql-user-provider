@@ -3,7 +3,8 @@ import uuid
 import mysql.connector
 import boto3
 import logging
-from mysql_user_provider import handler, request_schema
+
+from cfn_mysql_user_provider.mysql_user_provider import handler
 
 logging.basicConfig(level=logging.INFO)
 
