@@ -17,10 +17,13 @@ def close_it(self, exception_type, exception_value, callback):
     self.close()
     return self
 
+
 mysql.connector.CMySQLConnection.__enter__ = nothing
 mysql.connector.CMySQLConnection.__exit__ = close_it
 
 database_ports = [6033, 7033]
+
+
 def get_database(port):
     return {
         'User': 'root',
@@ -29,6 +32,7 @@ def get_database(port):
         'Port': port,
         'DBName': 'mysql'
     }
+
 
 def get_database_connection(port):
     db = get_database(port)
@@ -100,7 +104,7 @@ def test_create_grant(database_port):
     user = 'singlegrant'
     user_resource = create_user(user, database_port)
 
-    event = UserGrantEvent('Create', [ 'All' ], '*.*', user, port=database_port)
+    event = UserGrantEvent('Create', ['All'], '*.*', user, port=database_port)
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
@@ -129,7 +133,7 @@ def test_create_multiple_grant(database_port):
     user = 'multigrant'
     user_resource = create_user(user, database_port)
 
-    event = UserGrantEvent('Create', [ 'Select', 'Insert' ], '*.*', user, port=database_port)
+    event = UserGrantEvent('Create', ['Select', 'Insert'], '*.*', user, port=database_port)
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
@@ -158,13 +162,13 @@ def test_update_grant(database_port):
     user = 'updategrant'
     user_resource = create_user(user, database_port)
 
-    create_event = UserGrantEvent('Create', [ 'Select' ], '*.*', user, port=database_port)
+    create_event = UserGrantEvent('Create', ['Select'], '*.*', user, port=database_port)
     create_response = handler(create_event, {})
     assert create_response['Status'] == 'SUCCESS', create_response['Reason']
     assert 'PhysicalResourceId' in create_response, "PhysicalResourceId not provided after Create"
 
-    update_event = UserGrantEvent('Update', [ 'Insert' ], '*.*', user, port=database_port,
-        physical_resource_id=create_response['PhysicalResourceId'])
+    update_event = UserGrantEvent('Update', ['Insert'], '*.*', user, port=database_port,
+                                  physical_resource_id=create_response['PhysicalResourceId'])
     update_response = handler(update_event, {})
     assert update_response['Status'] == 'SUCCESS', update_response['Reason']
     assert 'PhysicalResourceId' in update_response, "PhysicalResourceId not provided after Update"
@@ -195,13 +199,13 @@ def test_delete_grant(database_port):
     user = 'deletegrant'
     user_resource = create_user(user, database_port)
 
-    create_event = UserGrantEvent('Create', [ 'Select' ], '*.*', user, port=database_port)
+    create_event = UserGrantEvent('Create', ['Select'], '*.*', user, port=database_port)
     create_response = handler(create_event, {})
     assert create_response['Status'] == 'SUCCESS', create_response['Reason']
     assert 'PhysicalResourceId' in create_response, "PhysicalResourceId not provided after Create"
 
-    delete_event = UserGrantEvent('Delete', [ 'Select' ], '*.*', user, port=database_port,
-        physical_resource_id=create_response['PhysicalResourceId'])
+    delete_event = UserGrantEvent('Delete', ['Select'], '*.*', user, port=database_port,
+                                  physical_resource_id=create_response['PhysicalResourceId'])
     delete_response = handler(delete_event, {})
     assert delete_response['Status'] == 'SUCCESS', delete_response['Reason']
 
@@ -222,13 +226,13 @@ def test_delete_grant_all(database_port):
     user = 'deletegrant_all'
     user_resource = create_user(user, database_port)
 
-    create_event = UserGrantEvent('Create', [ 'All' ], '*.*', user, port=database_port)
+    create_event = UserGrantEvent('Create', ['All'], '*.*', user, port=database_port)
     create_response = handler(create_event, {})
     assert create_response['Status'] == 'SUCCESS', create_response['Reason']
     assert 'PhysicalResourceId' in create_response, "PhysicalResourceId not provided after Create"
 
-    delete_event = UserGrantEvent('Delete', [ 'All' ], '*.*', user, port=database_port,
-        physical_resource_id=create_response['PhysicalResourceId'])
+    delete_event = UserGrantEvent('Delete', ['All'], '*.*', user, port=database_port,
+                                  physical_resource_id=create_response['PhysicalResourceId'])
     delete_response = handler(delete_event, {})
     assert delete_response['Status'] == 'SUCCESS', delete_response['Reason']
 

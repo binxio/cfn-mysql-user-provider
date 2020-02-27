@@ -10,6 +10,7 @@ from cfn_resource_provider import ResourceProvider
 
 log = logging.getLogger()
 
+
 class MySQLDatabaseProvider(ResourceProvider):
 
     def __init__(self):
@@ -60,14 +61,14 @@ class MySQLDatabaseProvider(ResourceProvider):
         if self.connection:
             self.connection.close()
             self.connection = None
-    
+
     def get_ssm_password(self, name):
         try:
             response = self.ssm.get_parameter(Name=name, WithDecryption=True)
             return response['Parameter']['Value']
         except ClientError as e:
             raise ValueError('Could not obtain password using name {}, {}'.format(name, e))
-    
+
     def get_sm_password(self, name):
         try:
             response = self.secretsmanager.get_secret_value(SecretId=name)

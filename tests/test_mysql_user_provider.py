@@ -17,6 +17,7 @@ def close_it(self, exception_type, exception_value, callback):
     self.close()
     return self
 
+
 mysql.connector.CMySQLConnection.__enter__ = nothing
 mysql.connector.CMySQLConnection.__exit__ = close_it
 
@@ -59,6 +60,7 @@ class Event(dict):
         except Exception as e:
             raise
         return result
+
 
 database_ports = [6033, 7033]
 

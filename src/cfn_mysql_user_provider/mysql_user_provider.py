@@ -322,9 +322,9 @@ class MySQLUserProvider(MySQLDatabaseProvider):
     def is_supported_resource_type(self):
         return self.resource_type == request_resource
 
+
 provider = MySQLUserProvider()
 
 
 def handler(request, context):
     return provider.handle(request, context)
-    

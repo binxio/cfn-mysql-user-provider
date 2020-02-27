@@ -89,6 +89,7 @@ request_schema = {
     }
 }
 
+
 class MySQLUserGrantProvider(MySQLDatabaseProvider):
 
     def __init__(self):
@@ -130,7 +131,7 @@ class MySQLUserGrantProvider(MySQLDatabaseProvider):
 
     def to_resource_format(self, grants):
         return '+'.join(grants)
-    
+
     def from_resource_format(self, grants):
         return grants.split('+')
 
@@ -138,9 +139,9 @@ class MySQLUserGrantProvider(MySQLDatabaseProvider):
         return ','.join(grants)
 
     def grant_user(self):
-        log.info('granting %s on %s to %s (with_grant_option=%s)', 
-            self.to_resource_format(self.grant_set), self.grant_level, self.user,
-            self.with_grant_option)
+        log.info('granting %s on %s to %s (with_grant_option=%s)',
+                 self.to_resource_format(self.grant_set), self.grant_level, self.user,
+                 self.with_grant_option)
         cursor = self.connection.cursor()
         try:
             if self.with_grant_option:
@@ -157,10 +158,10 @@ class MySQLUserGrantProvider(MySQLDatabaseProvider):
             cursor.close()
 
     def revoke_user(self):
-        _,_,_,_,_,res_grant_set,res_grant_level,res_user,res_with_grant_options = self.physical_resource_id.split(':')
+        _, _, _, _, _, res_grant_set, res_grant_level, res_user, res_with_grant_options = self.physical_resource_id.split(':')
         log.info('revoking %s on %s to %s (with_grant_option=%s)',
-            res_grant_set, res_grant_level, res_user,
-            res_with_grant_options)
+                 res_grant_set, res_grant_level, res_user,
+                 res_with_grant_options)
         cursor = self.connection.cursor()
         try:
             query = "REVOKE %s ON %s FROM '%s'@'%s'" % (
@@ -211,9 +212,9 @@ class MySQLUserGrantProvider(MySQLDatabaseProvider):
     def is_supported_resource_type(self):
         return self.resource_type == request_resource
 
+
 provider = MySQLUserGrantProvider()
 
 
 def handler(request, context):
     return provider.handle(request, context)
-    
