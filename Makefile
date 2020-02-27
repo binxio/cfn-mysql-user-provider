@@ -62,7 +62,8 @@ venv:
 	
 clean:
 	rm -rf .venv target
-	rm -rf src/*.pyc tests/*.pyc
+	find src/ -name '*.pyc' -delete
+	find tests/ -name '*.pyc' -delete
 
 test: venv
 	for i in $$PWD/cloudformation/*; do \
@@ -73,8 +74,10 @@ test: venv
 	pip install --quiet -r tests/test-requirements.txt && \
 	py.test tests
 
-autopep:
-	autopep8 --experimental --in-place --max-line-length 132 mysql_user_provider.py src/*.py tests/*.py
+autopep: venv
+	. ./.venv/bin/activate && \
+	pip install --quiet -r requirements.txt && \
+	autopep8 --experimental --in-place --max-line-length 132 mysql_user_provider.py src/cfn_mysql_user_provider/*.py tests/*.py
 
 deploy-provider: deploy
 	@set -x ;if aws cloudformation get-template-summary --stack-name $(NAME) >/dev/null 2>&1 ; then \
