@@ -4,6 +4,7 @@ NAME=cfn-mysql-user-provider
 AWS_REGION=eu-central-1
 S3_BUCKET_PREFIX=binxio-public
 S3_BUCKET=$(S3_BUCKET_PREFIX)-$(AWS_REGION)
+S3_COPY_ARGS="--acl public-read"
 
 ALL_REGIONS=$(shell printf "import boto3\nprint('\\\n'.join(map(lambda r: r['RegionName'], boto3.client('ec2').describe_regions()['Regions'])))\n" | python | grep -v '^$(AWS_REGION)$$')
 
@@ -20,12 +21,10 @@ help:
 	@echo 'make delete-demo     - deletes the demo cloudformation stack.'
 
 deploy: target/$(NAME)-$(VERSION).zip
-	aws s3 cp \
-		--acl public-read \
+	aws s3 cp ${S3_COPY_ARGS} \
 		target/$(NAME)-$(VERSION).zip \
 		s3://$(S3_BUCKET)/lambdas/$(NAME)-$(VERSION).zip 
-	aws s3 cp \
-		--acl public-read \
+	aws s3 cp ${S3_COPY_ARGS} \
 		s3://$(S3_BUCKET)/lambdas/$(NAME)-$(VERSION).zip \
 		s3://$(S3_BUCKET)/lambdas/$(NAME)-latest.zip 
 
@@ -33,11 +32,11 @@ deploy-all-regions: deploy
 	@for REGION in $(ALL_REGIONS); do \
 		echo "copying to region $$REGION.." ; \
 		aws s3 --region $(AWS_REGION) \
-			cp --acl public-read \
+			cp ${S3_COPY_ARGS} \
 			s3://$(S3_BUCKET_PREFIX)-$(AWS_REGION)/lambdas/$(NAME)-$(VERSION).zip \
 			s3://$(S3_BUCKET_PREFIX)-$$REGION/lambdas/$(NAME)-$(VERSION).zip; \
 		aws s3 --region $$REGION \
-			cp  --acl public-read \
+			cp ${S3_COPY_ARGS} \
 			s3://$(S3_BUCKET_PREFIX)-$$REGION/lambdas/$(NAME)-$(VERSION).zip \
 			s3://$(S3_BUCKET_PREFIX)-$$REGION/lambdas/$(NAME)-latest.zip; \
 	done

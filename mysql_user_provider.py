@@ -3,7 +3,7 @@ import os
 
 from cfn_mysql_user_provider import mysql_user_provider, mysql_user_grant_provider
 
-logging.getLogger().setLevel(os.getenv("LOG_LEVEL", "INFO"))
+logging.root.setLevel(os.getenv("LOG_LEVEL", "INFO"))
 
 
 def handler(request, context):
