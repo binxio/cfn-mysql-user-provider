@@ -29,10 +29,10 @@ By default WithGrantOption is set to `false`. This means the user is unable to g
 You can specify the following properties:
 
 - `Grant` - the privileges to grant
-- `On` - the privilege level to grant, use *.* for global grants
-- `User` - the user to grant, use user@host-syntax
+- `On` - the privilege level to grant, use *.* for global grants. Update requires replacement.
+- `User` - the user to grant, use user@host-syntax. Update requires replacement.
 - `WithGrantOption` - if the user is allows to grant others, defaults to `false`
-- `Database` - to create the user grant in
+- `Database` - to create the user grant in. Update requires replacement.
     - `Host` - the database server is listening on.
     - `Port` - port the database server is listening on.
     - `Database` - name to connect to.

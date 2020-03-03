@@ -32,14 +32,26 @@ class MySQLDatabaseProvider(ResourceProvider):
     @property
     def host(self):
         return self.get('Database', {}).get('Host', None)
+    
+    @property
+    def host_old(self):
+        return self.get_old('Database', {}).get('Host', None)
 
     @property
     def port(self):
         return self.get('Database', {}).get('Port', 3306)
 
     @property
+    def port_old(self):
+        return self.get_old('Database', {}).get('Port', 3306)
+
+    @property
     def dbname(self):
         return self.get('Database', {}).get('DBName', 'mysql')
+
+    @property
+    def dbname_old(self):
+        return self.get_old('Database', {}).get('DBName', 'mysql')
 
     @property
     def dbowner(self):

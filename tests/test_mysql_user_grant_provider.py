@@ -4,7 +4,7 @@ import mysql.connector
 import boto3
 import logging
 
-from cfn_mysql_user_provider.mysql_user_provider import handler
+from cfn_mysql_user_provider import mysql_user_provider, mysql_user_grant_provider
 
 logging.basicConfig(level=logging.INFO)
 
@@ -79,6 +79,7 @@ class UserEvent(dict):
             'ResourceProperties': {
                 'User': user,
                 'Password': 'password',
+                'WithDatabase': False,
                 'Database': get_database(port)
             }})
         if physical_resource_id is not None:
@@ -87,14 +88,14 @@ class UserEvent(dict):
 
 def create_user(user, database_port):
     event = UserEvent('Create', user, port=database_port)
-    response = handler(event, {})
+    response = mysql_user_provider.handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
     return response['PhysicalResourceId']
 
 
 def delete_user(resource, user, database_port):
     event = UserEvent('Delete', user, physical_resource_id=resource, port=database_port)
-    response = handler(event, {})
+    response = mysql_user_provider.handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
     return response
 
@@ -105,7 +106,7 @@ def test_create_grant(database_port):
     user_resource = create_user(user, database_port)
 
     event = UserGrantEvent('Create', ['All'], '*.*', user, port=database_port)
-    response = handler(event, {})
+    response = mysql_user_grant_provider.handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
     with get_database_connection(database_port) as connection:
@@ -113,17 +114,14 @@ def test_create_grant(database_port):
         try:
             cursor.execute("SHOW GRANTS FOR %s@'%'", [user])
             rows = cursor.fetchall()
-            assert len(rows) != 0, 'User %s wasn''t granted' % user
-            assert len(rows) == 1, 'User %s has multiple grants' % user
-
-            expected_grant = 'GRANT ALL PRIVILEGES ON *.* TO \'%s\'@\'%%\'' % user
-
-            raw_user_grant, = rows[0]
-            user_grant_identified_by_index = raw_user_grant.index(" IDENTIFIED BY PASSWORD")
-            user_grant = raw_user_grant[0:user_grant_identified_by_index]
-            assert expected_grant == user_grant, 'User %s has no ALL PRIVILEGE on *.*. Grant=%s' % (user, user_grant)
         finally:
             cursor.close()
+
+    assert len(rows) != 0, 'User %s isn''t granted' % user
+
+    sql_grants = [parse_grant(r) for r in rows]
+    expected_grant = 'GRANT ALL PRIVILEGES ON *.* TO \'%s\'@\'%%\'' % user
+    assert expected_grant in sql_grants, 'User %s has no ALL PRIVILEGE on *.*' % (user)
 
     delete_user(user_resource, user, database_port)
 
@@ -134,7 +132,7 @@ def test_create_multiple_grant(database_port):
     user_resource = create_user(user, database_port)
 
     event = UserGrantEvent('Create', ['Select', 'Insert'], '*.*', user, port=database_port)
-    response = handler(event, {})
+    response = mysql_user_grant_provider.handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
     with get_database_connection(database_port) as connection:
@@ -142,17 +140,54 @@ def test_create_multiple_grant(database_port):
         try:
             cursor.execute("SHOW GRANTS FOR %s@'%'", [user])
             rows = cursor.fetchall()
-            assert len(rows) != 0, 'User %s wasn''t granted' % user
-            assert len(rows) == 1, 'User %s has multiple grants' % user
-
-            expected_grant = 'GRANT SELECT, INSERT ON *.* TO \'%s\'@\'%%\'' % user
-
-            raw_user_grant, = rows[0]
-            user_grant_identified_by_index = raw_user_grant.index(" IDENTIFIED BY PASSWORD")
-            user_grant = raw_user_grant[0:user_grant_identified_by_index]
-            assert expected_grant == user_grant, 'User %s has no SELECT,INSERT on *.*. Grant=%s' % (user, user_grant)
         finally:
             cursor.close()
+
+    assert len(rows) != 0, 'User %s isn''t granted' % user
+
+    sql_grants = [parse_grant(r) for r in rows]
+    expected_grant = 'GRANT SELECT, INSERT ON *.* TO \'%s\'@\'%%\'' % user
+    assert expected_grant in sql_grants, 'User %s has no SELECT, INSERT on *.*' % (user)
+
+    delete_user(user_resource, user, database_port)
+
+
+@pytest.mark.parametrize("database_port", database_ports)
+def test_recreate_grant(database_port):
+    user = 'recreategrant'
+    user_resource = create_user(user, database_port)
+
+    create_event = UserGrantEvent('Create', ['Select'], '*.*', user, port=database_port)
+    create_response = mysql_user_grant_provider.handler(create_event, {})
+    assert create_response['Status'] == 'SUCCESS', create_response['Reason']
+    assert 'PhysicalResourceId' in create_response, "PhysicalResourceId not provided after Create"
+
+    update_event = UserGrantEvent('Update', ['Select','Insert'], 'test.*', user, port=database_port,
+                                  physical_resource_id=create_response['PhysicalResourceId'])
+    update_response = mysql_user_grant_provider.handler(update_event, {})
+    assert update_response['Status'] == 'SUCCESS', update_response['Reason']
+    assert 'PhysicalResourceId' in update_response, "PhysicalResourceId not provided after Update"
+    assert create_response['PhysicalResourceId'] != update_response['PhysicalResourceId'], "Expected updated PhysicalResourceId"
+
+    # Sending Delete to match recreate flow..
+    delete_event = UserGrantEvent('Delete', ['Select'], '*.*', user, port=database_port,
+                                physical_resource_id=create_response['PhysicalResourceId'])
+    delete_response = mysql_user_grant_provider.handler(delete_event, {})
+    assert delete_response['Status'] == 'SUCCESS', delete_response['Reason']
+
+    with get_database_connection(database_port) as connection:
+        cursor = connection.cursor()
+        try:
+            cursor.execute("SHOW GRANTS FOR %s@'%'", [user])
+            rows = cursor.fetchall()
+        finally:
+            cursor.close()
+        
+    assert len(rows) != 0, 'User %s isn''t granted' % user
+
+    sql_grants = [parse_grant(r) for r in rows]
+    expected_grant = 'GRANT SELECT, INSERT ON `test`.* TO \'%s\'@\'%%\'' % user
+    assert expected_grant in sql_grants, 'User %s has no SELECT, INSERT on `test`.*' % (user)
 
     delete_user(user_resource, user, database_port)
 
@@ -163,36 +198,32 @@ def test_update_grant(database_port):
     user_resource = create_user(user, database_port)
 
     create_event = UserGrantEvent('Create', ['Select'], '*.*', user, port=database_port)
-    create_response = handler(create_event, {})
+    create_response = mysql_user_grant_provider.handler(create_event, {})
     assert create_response['Status'] == 'SUCCESS', create_response['Reason']
     assert 'PhysicalResourceId' in create_response, "PhysicalResourceId not provided after Create"
 
-    update_event = UserGrantEvent('Update', ['Insert'], '*.*', user, port=database_port,
+    update_event = UserGrantEvent('Update', ['Select','Insert'], '*.*', user, port=database_port,
                                   physical_resource_id=create_response['PhysicalResourceId'])
-    update_response = handler(update_event, {})
+    update_response = mysql_user_grant_provider.handler(update_event, {})
     assert update_response['Status'] == 'SUCCESS', update_response['Reason']
     assert 'PhysicalResourceId' in update_response, "PhysicalResourceId not provided after Update"
-    assert create_response['PhysicalResourceId'] != update_response['PhysicalResourceId'], "Expected updated PhysicalResourceId"
+    assert create_response['PhysicalResourceId'] == update_response['PhysicalResourceId'], "PhysicalResourceId changed after Update"
 
     with get_database_connection(database_port) as connection:
         cursor = connection.cursor()
         try:
             cursor.execute("SHOW GRANTS FOR %s@'%'", [user])
             rows = cursor.fetchall()
-            assert len(rows) != 0, 'User %s wasn''t granted' % user
-            assert len(rows) == 1, 'User %s has multiple grants' % user
-
-            expected_grant = 'GRANT INSERT ON *.* TO \'%s\'@\'%%\'' % user
-
-            raw_user_grant, = rows[0]
-            user_grant_identified_by_index = raw_user_grant.index(" IDENTIFIED BY PASSWORD")
-            user_grant = raw_user_grant[0:user_grant_identified_by_index]
-            assert expected_grant == user_grant, 'User %s has no INSERT on *.*. Grant=%s' % (user, user_grant)
         finally:
             cursor.close()
+        
+    assert len(rows) != 0, 'User %s isn''t granted' % user
+
+    sql_grants = [parse_grant(r) for r in rows]
+    expected_grant = 'GRANT SELECT, INSERT ON *.* TO \'%s\'@\'%%\'' % user
+    assert expected_grant in sql_grants, 'User %s has no SELECT, INSERT on *.*' % (user)
 
     delete_user(user_resource, user, database_port)
-
 
 @pytest.mark.parametrize("database_port", database_ports)
 def test_delete_grant(database_port):
@@ -200,13 +231,13 @@ def test_delete_grant(database_port):
     user_resource = create_user(user, database_port)
 
     create_event = UserGrantEvent('Create', ['Select'], '*.*', user, port=database_port)
-    create_response = handler(create_event, {})
+    create_response = mysql_user_grant_provider.handler(create_event, {})
     assert create_response['Status'] == 'SUCCESS', create_response['Reason']
     assert 'PhysicalResourceId' in create_response, "PhysicalResourceId not provided after Create"
 
     delete_event = UserGrantEvent('Delete', ['Select'], '*.*', user, port=database_port,
                                   physical_resource_id=create_response['PhysicalResourceId'])
-    delete_response = handler(delete_event, {})
+    delete_response = mysql_user_grant_provider.handler(delete_event, {})
     assert delete_response['Status'] == 'SUCCESS', delete_response['Reason']
 
     with get_database_connection(database_port) as connection:
@@ -214,9 +245,13 @@ def test_delete_grant(database_port):
         try:
             cursor.execute("SHOW GRANTS FOR %s@'%'", [user])
             rows = cursor.fetchall()
-            assert len(rows) == 0, 'User %s is still granted' % user
         finally:
             cursor.close()
+
+    if len(rows) != 0:
+        sql_grants = [parse_grant(r) for r in rows]
+        expected_grant = 'GRANT USAGE ON *.* TO \'%s\'@\'%%\'' % user
+        assert expected_grant in sql_grants, 'User %s is still granted.' % (user)
 
     delete_user(user_resource, user, database_port)
 
@@ -227,13 +262,13 @@ def test_delete_grant_all(database_port):
     user_resource = create_user(user, database_port)
 
     create_event = UserGrantEvent('Create', ['All'], '*.*', user, port=database_port)
-    create_response = handler(create_event, {})
+    create_response = mysql_user_grant_provider.handler(create_event, {})
     assert create_response['Status'] == 'SUCCESS', create_response['Reason']
     assert 'PhysicalResourceId' in create_response, "PhysicalResourceId not provided after Create"
 
     delete_event = UserGrantEvent('Delete', ['All'], '*.*', user, port=database_port,
                                   physical_resource_id=create_response['PhysicalResourceId'])
-    delete_response = handler(delete_event, {})
+    delete_response = mysql_user_grant_provider.handler(delete_event, {})
     assert delete_response['Status'] == 'SUCCESS', delete_response['Reason']
 
     with get_database_connection(database_port) as connection:
@@ -241,8 +276,21 @@ def test_delete_grant_all(database_port):
         try:
             cursor.execute("SHOW GRANTS FOR %s@'%'", [user])
             rows = cursor.fetchall()
-            assert len(rows) == 0, 'User %s is still granted' % user
         finally:
             cursor.close()
+    
+    if len(rows) != 0:
+        sql_grants = [parse_grant(r) for r in rows]
+        expected_grant = 'GRANT USAGE ON *.* TO \'%s\'@\'%%\'' % user
+        assert expected_grant in sql_grants, 'User %s is still granted.' % (user)
 
     delete_user(user_resource, user, database_port)
+
+
+def parse_grant(sql_grant):
+    grant = sql_grant[0]
+    identified_by_index = grant.find(" IDENTIFIED BY PASSWORD")
+    if identified_by_index != -1:
+        return grant[0:identified_by_index]
+    
+    return grant

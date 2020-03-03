@@ -29,13 +29,13 @@ request_schema = {
         },
         "On": {
             "type": "string",
-            "description": "specifies the level on which the privilege is granted"
+            "description": "specifies the level on which the privilege is granted, update requires replacement."
         },
         "User": {
             "type": "string",
             "pattern": "^[_$A-Za-z][A-Za-z0-9_$]*(@[.A-Za-z0-9%_$\\-]+)?$",
             "maxLength": 32,
-            "description": "the user receiving the grant"
+            "description": "the user receiving the grant, update requires replacement."
         },
         "WithGrantOption": {
             "type": "boolean",
@@ -102,25 +102,38 @@ class MySQLUserGrantProvider(MySQLDatabaseProvider):
     @property
     def grant_set(self):
         return self.get('Grant')
+    
+    @property
+    def grant_set_old(self):
+        return self.get_old('Grant')
 
     @property
     def grant_level(self):
         return self.get('On')
 
     @property
+    def grant_level_old(self):
+        return self.get_old('On')
+
+    @property
     def user(self):
         return self.get('User')
+
+    def user_old(self):
+        return self.get_old('User')
 
     @property
     def with_grant_option(self):
         return self.get('WithGrantOption', False)
 
     @property
+    def with_grant_option_old(self):
+        return self.get_old('WithGrantOption', False)
+
+    @property
     def url(self):
-        return "mysql:%s:%s:%s::%s:%s:%s:%r" % (
-            self.host, self.port, self.dbname,
-            self.to_resource_format(self.grant_set), self.grant_level, self.user,
-            self.with_grant_option)
+        return "mysql:%s:grants:%s:%s" % (
+            self.dbname, self.user, self.grant_level)
 
     def mysql_user(self, user):
         return user.split('@')[0]
@@ -129,18 +142,15 @@ class MySQLUserGrantProvider(MySQLDatabaseProvider):
         parts = user.split('@')
         return parts[1] if len(parts) > 1 else '%'
 
-    def to_resource_format(self, grants):
-        return '+'.join(grants)
-
-    def from_resource_format(self, grants):
-        return grants.split('+')
+    def to_log_format(self, grants):
+        return ', '.join(grants)
 
     def to_sql_format(self, grants):
         return ','.join(grants)
 
     def grant_user(self):
         log.info('granting %s on %s to %s (with_grant_option=%s)',
-                 self.to_resource_format(self.grant_set), self.grant_level, self.user,
+                 self.to_log_format(self.grant_set), self.grant_level, self.user,
                  self.with_grant_option)
         cursor = self.connection.cursor()
         try:
@@ -158,15 +168,29 @@ class MySQLUserGrantProvider(MySQLDatabaseProvider):
             cursor.close()
 
     def revoke_user(self):
-        _, _, _, _, _, res_grant_set, res_grant_level, res_user, res_with_grant_options = self.physical_resource_id.split(':')
         log.info('revoking %s on %s to %s (with_grant_option=%s)',
-                 res_grant_set, res_grant_level, res_user,
-                 res_with_grant_options)
+                 self.to_log_format(self.grant_set), self.grant_level, self.user,
+                 self.with_grant_option)
+
         cursor = self.connection.cursor()
         try:
             query = "REVOKE %s ON %s FROM '%s'@'%s'" % (
-                self.to_sql_format(self.from_resource_format(res_grant_set)), res_grant_level,
-                self.mysql_user(res_user), self.mysql_user_host(res_user))
+                self.to_sql_format(self.grant_set), self.grant_level,
+                self.mysql_user(self.user), self.mysql_user_host(self.user))
+            cursor.execute(query)
+        finally:
+            cursor.close()
+
+    def revoke_user_old(self):
+        log.info('revoking %s on %s to %s (with_grant_option=%s)',
+                 self.to_log_format(self.grant_set_old), self.grant_level_old, self.user_old,
+                 self.with_grant_option_old)
+
+        cursor = self.connection.cursor()
+        try:
+            query = "REVOKE %s ON %s FROM '%s'@'%s'" % (
+                self.to_sql_format(self.grant_set_old), self.grant_level_old,
+                self.mysql_user(self.user_old), self.mysql_user_host(self.user_old))
             cursor.execute(query)
         finally:
             cursor.close()
@@ -183,14 +207,22 @@ class MySQLUserGrantProvider(MySQLDatabaseProvider):
             self.close()
 
     def update(self):
-        if self.url == self.physical_resource_id:
-            return
+        if (self.dbname != self.dbname_old or
+            self.user != self.user_old or
+            self.grant_level != self.grant_level_old):
+            # Major change, recreate..
+            return self.create()
+
+        if (self.grant_level == self.grant_level_old and
+            self.grant_set == self.grant_set_old and
+            self.with_grant_option == self.with_grant_option_old):
+            # Unchanged, nothing to do..
+           return
 
         try:
             self.connect()
-            self.revoke_user()
+            self.revoke_user_old()
             self.grant_user()
-            self.physical_resource_id = self.url
         except Exception as e:
             self.fail('Failed to grant the user, %s' % e)
         finally:
