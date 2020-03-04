@@ -57,7 +57,8 @@ venv:
 	python3 -m venv .venv  && \
 	. ./.venv/bin/activate && \
 	pip install --quiet --upgrade pip && \
-	pip install --quiet -e .
+	pip install --quiet -e . && \
+	pip install --quiet -r tests/test-requirements.txt 
 	
 clean:
 	rm -rf .venv target
