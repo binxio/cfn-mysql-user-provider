@@ -3,7 +3,8 @@ import uuid
 import mysql.connector
 import boto3
 import logging
-from mysql_user_provider import handler, request_schema
+
+from cfn_mysql_user_provider.mysql_user_provider import handler
 
 logging.basicConfig(level=logging.INFO)
 
@@ -15,6 +16,7 @@ def nothing(self):
 def close_it(self, exception_type, exception_value, callback):
     self.close()
     return self
+
 
 mysql.connector.CMySQLConnection.__enter__ = nothing
 mysql.connector.CMySQLConnection.__exit__ = close_it
@@ -58,6 +60,7 @@ class Event(dict):
         except Exception as e:
             raise
         return result
+
 
 database_ports = [6033, 7033]
 

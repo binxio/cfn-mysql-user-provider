@@ -3,7 +3,8 @@
 .noseids
 *.zip
 deps/
-.vscode/
+.vscode/*
+!.vscode/settings.json
 # Byte-compiled / optimized / DLL files
 .pytest_cache/
 __pycache__/

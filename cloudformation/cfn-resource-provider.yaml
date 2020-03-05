@@ -10,6 +10,9 @@ Parameters:
   LambdaS3Bucket:
     Type: String
     Default: ''
+  LambdaVersion:
+    Type: String
+    Default: '0.2.3'
 Conditions:
   UsePublicBucket: !Equals
     - !Ref 'LambdaS3Bucket'
@@ -66,7 +69,7 @@ Resources:
           - UsePublicBucket
           - !Sub 'binxio-public-${AWS::Region}'
           - !Ref 'LambdaS3Bucket'
-        S3Key: lambdas/cfn-mysql-user-provider-0.2.3.zip
+        S3Key: !Sub 'lambdas/cfn-mysql-user-provider-${LambdaVersion}.zip'
       VpcConfig:
         SecurityGroupIds:
           - !Ref 'SecurityGroup'
@@ -75,4 +78,4 @@ Resources:
       Handler: mysql_user_provider.handler
       MemorySize: 128
       Role: !GetAtt 'LambdaRole.Arn'
-      Runtime: python3.6
+      Runtime: python3.7

@@ -1,0 +1,8 @@
+{
+    "python.venvPath": "${workspaceFolder}/.venv",
+    "python.testing.pytestArgs": [],
+    "python.testing.unittestEnabled": false,
+    "python.testing.nosetestsEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "python.pythonPath": ".venv/bin/python3"
+}
