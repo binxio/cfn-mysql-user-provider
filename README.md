@@ -36,7 +36,7 @@ It is quite easy: you specify a CloudFormation resource of the [Custom::MySQLUse
 
 After the deployment, the MySQL user 'kong' has been created together with a matching database 'kong'. The password for the root database user has been obtained by querying the Parameter `/MySQL/root/PGPASSWORD`.  If you just want to create a user with which you can login to the MySQL database server, without a database, specify `WithDatabase` as `false`. 
 
-The RetainPolicy by default is `Retain`. This means that the login to the database is disabled. If you specify drop, it will be dropped and your data will be lost.
+The DeletionPolicy by default is `Retain`. This means that the login to the database is disabled. If you specify drop, it will be dropped and your data will be lost.
 
 
 ## Installation
