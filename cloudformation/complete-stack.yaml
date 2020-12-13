@@ -1,0 +1,31 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Demo mysql user"
+Resources:
+  VPC: 
+    Type: AWS::CloudFormation::Stack
+    Properties: 
+      TemplateURL: https://s3.eu-central-1.amazonaws.com/binxio-public-eu-central-1/demo/cfn-mysql-user-provider/vpc.yaml
+  SecretProvider: 
+    Type: AWS::CloudFormation::Stack
+    Properties: 
+      TemplateURL: https://s3.eu-central-1.amazonaws.com/binxio-public-eu-central-1/lambdas/cfn-secret-provider-1.2.0.yaml
+  CustomProvider: 
+    Type: AWS::CloudFormation::Stack
+    Properties: 
+      TemplateURL: https://s3.eu-central-1.amazonaws.com/binxio-public-eu-central-1/demo/cfn-mysql-user-provider/cfn-resource-provider.yaml
+      Parameters:
+        VPC: !GetAtt VPC.Outputs.VPCID
+        Subnets: !GetAtt VPC.Outputs.PrivateSubnetIDs
+        SecurityGroup: !GetAtt VPC.Outputs.DefaultSecurityGroup
+  Demo: 
+    Type: AWS::CloudFormation::Stack
+    DependsOn: 
+      - CustomProvider
+      - SecretProvider
+    Properties: 
+      TemplateURL: https://s3.eu-central-1.amazonaws.com/binxio-public-eu-central-1/demo/cfn-mysql-user-provider/demo-stack.yaml
+      Parameters:
+        VPC: !GetAtt VPC.Outputs.VPCID
+        Subnets: !GetAtt VPC.Outputs.PrivateSubnetIDs
+        SecurityGroup: !GetAtt VPC.Outputs.DefaultSecurityGroup

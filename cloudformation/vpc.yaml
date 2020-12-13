@@ -1,0 +1,481 @@
+
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Generated Template for a VPC"
+Parameters:
+  cidrBlockVpc:
+    Default: "10.0.0.0/16"
+    Type: String
+    Description: "Enter a valid /16 cidr block."
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/16'
+  yourHomeIPRange:
+    Default: "0.0.0.0/0"
+    Type: String
+    Description: "Enter a valid cidr block to allow traffic to SSH."
+    AllowedPattern: '((\d{1,3})\.){3}\d{1,3}/\d{1,2}'
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref cidrBlockVpc
+      EnableDnsHostnames: true
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}"
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId:
+        Ref: InternetGateway
+      VpcId:
+        Ref: VPC
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-PublicRouteTable"
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+      RouteTableId:
+        Ref: PublicRouteTable
+  NoInternetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-NoInternetRouteTable"
+  BlockInboundDefaultNetworkAcl:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      NetworkAclId: !GetAtt VPC.DefaultNetworkAcl
+      RuleNumber: 1
+      Protocol: -1
+      RuleAction: "deny"
+      Egress: False
+      CidrBlock: "0.0.0.0/0"
+      PortRange:
+        From: 0
+        To: 65535
+  BlockOutboundDefaultNetworkAcl:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      NetworkAclId: !GetAtt VPC.DefaultNetworkAcl
+      RuleNumber: 1
+      Protocol: -1
+      RuleAction: "deny"
+      Egress: True
+      CidrBlock: "0.0.0.0/0"
+      PortRange:
+        From: 0
+        To: 65535
+  PublicNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-Public"
+  InboundPublicNetworkAclEntryHTTP:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      NetworkAclId:
+        Ref: "PublicNetworkAcl"
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: "allow"
+      Egress: False
+      CidrBlock: "0.0.0.0/0"
+      PortRange:
+        From: 80
+        To: 80
+  InboundPublicNetworkAclEntryHTTPS:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      NetworkAclId:
+        Ref: "PublicNetworkAcl"
+      RuleNumber: 110
+      Protocol: 6
+      RuleAction: "allow"
+      Egress: False
+      CidrBlock: "0.0.0.0/0"
+      PortRange:
+        From: 443
+        To: 443
+  InboundPublicNetworkAclEntrySSH:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      NetworkAclId:
+        Ref: "PublicNetworkAcl"
+      RuleNumber: 120
+      Protocol: 6
+      RuleAction: "allow"
+      Egress: False
+      CidrBlock: !Ref yourHomeIPRange
+      PortRange:
+        From: 22
+        To: 22
+  InboundPublicNetworkAclEntryRDP:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      NetworkAclId:
+        Ref: "PublicNetworkAcl"
+      RuleNumber: 130
+      Protocol: 6
+      RuleAction: "allow"
+      Egress: False
+      CidrBlock: !Ref yourHomeIPRange
+      PortRange:
+        From: 3389
+        To: 3389
+  InboundPublicNetworkAclEntryHighPorts:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      NetworkAclId:
+        Ref: "PublicNetworkAcl"
+      RuleNumber: 140
+      Protocol: 6
+      RuleAction: "allow"
+      Egress: False
+      CidrBlock: "0.0.0.0/0"
+      PortRange:
+        From: 1024
+        To: 65535
+  OutboundPublicNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: "PublicNetworkAcl"
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: "allow"
+      Egress: True
+      CidrBlock: "0.0.0.0/0"
+      PortRange:
+        From: 0
+        To: 65535
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref "VPC"
+      AvailabilityZone: !Join ["", [!Ref "AWS::Region", "a"]]
+      CidrBlock:
+        !Select
+        - 0
+        - 'Fn::Cidr':
+            - !Select
+              - 0
+              - 'Fn::Cidr':
+                  - !Ref "cidrBlockVpc"
+                  - 4
+                  - 14
+            - 8
+            - 11
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-PublicSubnetA"
+        - Key: "Layer"
+          Value: "public"
+        - Key: "LayerCidr"
+          Value:
+            !Select
+            - 0
+            - 'Fn::Cidr':
+                - !Ref "cidrBlockVpc"
+                - 4
+                - 14
+  PublicSubnetANetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnetA
+      NetworkAclId:
+        Ref: PublicNetworkAcl
+  PublicRouteTableAAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnetA
+      RouteTableId:
+        Ref: PublicRouteTable
+  NATA:
+    DependsOn: GatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !Sub "${EIPA.AllocationId}"
+      SubnetId:
+        Ref: PublicSubnetA
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-NATA"
+  EIPA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref "VPC"
+      AvailabilityZone: !Join ["", [!Ref "AWS::Region", "b"]]
+      CidrBlock:
+        !Select
+        - 1
+        - 'Fn::Cidr':
+            - !Select
+              - 0
+              - 'Fn::Cidr':
+                  - !Ref "cidrBlockVpc"
+                  - 4
+                  - 14
+            - 8
+            - 11
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-PublicSubnetB"
+        - Key: "Layer"
+          Value: "public"
+        - Key: "LayerCidr"
+          Value:
+            !Select
+            - 0
+            - 'Fn::Cidr':
+                - !Ref "cidrBlockVpc"
+                - 4
+                - 14
+  PublicSubnetBNetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnetB
+      NetworkAclId:
+        Ref: PublicNetworkAcl
+  PublicRouteTableBAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnetB
+      RouteTableId:
+        Ref: PublicRouteTable
+  NATB:
+    DependsOn: GatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !Sub "${EIPB.AllocationId}"
+      SubnetId:
+        Ref: PublicSubnetB
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-NATB"
+  EIPB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+  PrivateNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-Private"
+  InboundPrivateNetworkAclEntryLocal:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      NetworkAclId:
+        Ref: "PrivateNetworkAcl"
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: "allow"
+      Egress: False
+      CidrBlock: !Ref cidrBlockVpc
+      PortRange:
+        From: 0
+        To: 65535
+  InboundPrivateNetworkAclEntryReturnTraffic:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      NetworkAclId:
+        Ref: "PrivateNetworkAcl"
+      RuleNumber: 110
+      Protocol: -1
+      RuleAction: "allow"
+      Egress: False
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 1024
+        To: 65535
+  OutboundPrivateNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId:
+        Ref: "PrivateNetworkAcl"
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: "allow"
+      Egress: True
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 0
+        To: 65535
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref "VPC"
+      AvailabilityZone: !Join ["", [!Ref "AWS::Region", "a"]]
+      CidrBlock:
+        !Select
+        - 0
+        - 'Fn::Cidr':
+            - !Select
+              - 1
+              - 'Fn::Cidr':
+                  - !Ref "cidrBlockVpc"
+                  - 4
+                  - 14
+            - 8
+            - 11
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-PrivateSubnetA"
+        - Key: "Layer"
+          Value: "private"
+        - Key: "LayerCidr"
+          Value:
+            !Select
+            - 1
+            - 'Fn::Cidr':
+                - !Ref "cidrBlockVpc"
+                - 4
+                - 14
+  PrivateSubnetANetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnetA
+      NetworkAclId:
+        Ref: PrivateNetworkAcl
+  PrivateRouteTableAAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnetA
+      RouteTableId:
+        Ref: PrivateRouteTableA
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-PrivateRouteTableA"
+        - Key: "Layer"
+          Value: "private"
+  PrivateNATARoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATA
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref "VPC"
+      AvailabilityZone: !Join ["", [!Ref "AWS::Region", "b"]]
+      CidrBlock:
+        !Select
+        - 1
+        - 'Fn::Cidr':
+            - !Select
+              - 1
+              - 'Fn::Cidr':
+                  - !Ref "cidrBlockVpc"
+                  - 4
+                  - 14
+            - 8
+            - 11
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-PrivateSubnetB"
+        - Key: "Layer"
+          Value: "private"
+        - Key: "LayerCidr"
+          Value:
+            !Select
+            - 1
+            - 'Fn::Cidr':
+                - !Ref "cidrBlockVpc"
+                - 4
+                - 14
+  PrivateSubnetBNetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnetB
+      NetworkAclId:
+        Ref: PrivateNetworkAcl
+  PrivateRouteTableBAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivateSubnetB
+      RouteTableId:
+        Ref: PrivateRouteTableB
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-PrivateRouteTableB"
+        - Key: "Layer"
+          Value: "private"
+  PrivateNATBRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: NATB
+Outputs:
+  VPCID:
+    Description: The VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCID"
+  PublicSubnetIDs:
+    Description: A list of publicSubnetsIDs
+    Value:
+      !Join
+      - ', '
+      - - !Ref "PublicSubnetA"
+        - !Ref "PublicSubnetB"
+    Export:
+      Name: !Sub "${AWS::StackName}-publicSubnetIDs"
+  PrivateSubnetIDs:
+    Description: A list of privateSubnetsIDs
+    Value:
+      !Join
+      - ', '
+      - - !Ref "PrivateSubnetA"
+        - !Ref "PrivateSubnetB"
+    Export:
+      Name: !Sub "${AWS::StackName}-privateSubnetIDs"
+  DefaultSecurityGroup:
+    Description: default security group of VPC
+    Value: !GetAtt 'VPC.DefaultSecurityGroup'
+    Export:
+      Name: !Sub "${AWS::StackName}-DefaultSecurityGroup"
