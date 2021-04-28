@@ -19,7 +19,7 @@ It is quite easy: you specify a CloudFormation resource of the [Custom::MySQLUse
       Database:                   # the server to create the new user or database in
         Host: MySQL
         Port: 3306
-        Database: root
+        DBName: root
         User: root
         PasswordParameterName: /MySQL/root/PGPASSWORD                # put your root password is in the parameter store
       ServiceToken: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:binxioio-cfn-mysql-user-provider-vpc-${AppVPC}'
