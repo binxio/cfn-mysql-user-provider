@@ -18,7 +18,7 @@ It is quite easy: you specify a CloudFormation resource of the [Custom::MySQLUse
       DeletionPolicy: Retain 
       Database:                   # the server to create the new user or database in
         Host: MySQL
-        Port: 5432
+        Port: 3306
         Database: root
         User: root
         PasswordParameterName: /MySQL/root/PGPASSWORD                # put your root password is in the parameter store
