@@ -18,8 +18,8 @@ It is quite easy: you specify a CloudFormation resource of the [Custom::MySQLUse
       DeletionPolicy: Retain 
       Database:                   # the server to create the new user or database in
         Host: MySQL
-        Port: 5432
-        Database: root
+        Port: 3306
+        DBName: root
         User: root
         PasswordParameterName: /MySQL/root/PGPASSWORD                # put your root password is in the parameter store
       ServiceToken: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:binxioio-cfn-mysql-user-provider-vpc-${AppVPC}'
