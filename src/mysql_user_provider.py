@@ -195,7 +195,8 @@ class MySQLUser(ResourceProvider):
     @property
     def connect_info(self):
         return {'host': self.host, 'port': self.port, 'database': self.dbname,
-                'user': self.dbowner, 'password': self.dbowner_password}
+                'user': self.dbowner, 'password': self.dbowner_password,
+                'connection_timeout': 2}
 
     @property
     def allow_update(self):
