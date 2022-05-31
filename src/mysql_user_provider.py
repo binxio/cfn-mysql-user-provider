@@ -9,7 +9,7 @@ import mysql.connector
 from botocore.exceptions import ClientError
 from cfn_resource_provider import ResourceProvider
 
-log = logging.getLogger()
+log = logging.root
 log.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
 
 request_schema = {
@@ -27,6 +27,25 @@ request_schema = {
             "pattern": "^[_$A-Za-z][A-Za-z0-9_$]*(@[.A-Za-z0-9%_$\\-]+)?$",
             "maxLength": 32,
             "description": "the user to create"
+        },
+        "Grant": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "default": ['SELECT'],
+            "description": "the privileges to grant"
+        },
+        "GrantOn": {
+            "type": "string",
+            "maxLength": 32,
+            "default": "*.*",
+            "description": "the privilege level to grant, use *.* for global grants"
+        },
+        "WithGrantOption": {
+            "type": "boolean",
+            "default": False,
+            "description": "if the user is allowed to grant others"
         },
         "Password": {
             "type": "string",
@@ -160,13 +179,32 @@ class MySQLUser(ResourceProvider):
         return self.get('User')
 
     @property
-    def mysql_user(self):
-        return self.user.split('@')[0]
+    def user_old(self):
+        return self.get_old('User')
 
     @property
-    def mysql_user_host(self):
-        parts = self.user.split('@')
-        return parts[1] if len(parts) > 1 else '%'
+    def grant(self):
+        return self.get('Grant')
+
+    @property
+    def grant_old(self):
+        return self.get_old('Grant')
+
+    @property
+    def grant_on(self):
+        return self.get('GrantOn')
+
+    @property
+    def grant_on_old(self):
+        return self.get_old('GrantOn')
+
+    @property
+    def with_grant_option(self):
+        return self.get('WithGrantOption')
+
+    @property
+    def with_grant_option_old(self):
+        return self.get_old('WithGrantOption')
 
     @property
     def host(self):
@@ -179,6 +217,10 @@ class MySQLUser(ResourceProvider):
     @property
     def dbname(self):
         return self.get('Database', {}).get('DBName', 'mysql')
+
+    @property
+    def dbname_old(self):
+        return self.get_old('Database', {}).get('DBName', 'mysql')
 
     @property
     def dbowner(self):
@@ -201,12 +243,19 @@ class MySQLUser(ResourceProvider):
     def allow_update(self):
         return self.url == self.physical_resource_id
 
+    def mysql_user(self, user):
+        return user.split('@')[0]
+
+    def mysql_user_host(self, user):
+        parts = user.split('@')
+        return parts[1] if len(parts) > 1 else '%'
+
     @property
     def url(self):
         if self.with_database:
-            return 'mysql:%s:%s:%s:%s:%s' % (self.host, self.port, self.dbname, self.mysql_user, self.user)
+            return 'mysql:%s:%s:%s:%s:%s:%s' % (self.host, self.port, self.dbname, self.mysql_user(self.user), self.user, self.grant_on)
         else:
-            return 'mysql:%s:%s:%s::%s' % (self.host, self.port, self.dbname, self.user)
+            return 'mysql:%s:%s:%s::%s:%s' % (self.host, self.port, self.dbname, self.user, self.grant_on)
 
     def connect(self):
         log.info('connecting to database %s on port %d as user %s', self.host, self.port, self.dbowner)
@@ -224,7 +273,7 @@ class MySQLUser(ResourceProvider):
         cursor = self.connection.cursor()
         try:
             cursor.execute(
-                "SELECT SCHEMA_NAME FROM information_schema.schemata WHERE SCHEMA_NAME = %s", [self.mysql_user])
+                "SELECT SCHEMA_NAME FROM information_schema.schemata WHERE SCHEMA_NAME = %s", [self.mysql_user(self.user)])
             rows = cursor.fetchall()
             return len(rows) > 0
         finally:
@@ -234,7 +283,7 @@ class MySQLUser(ResourceProvider):
         cursor = self.connection.cursor()
         try:
             cursor.execute(
-                "SELECT * FROM mysql.user WHERE user = %s AND host = %s", [self.mysql_user, self.mysql_user_host])
+                "SELECT * FROM mysql.user WHERE user = %s AND host = %s", [self.mysql_user(self.user), self.mysql_user_host(self.user)])
             rows = cursor.fetchall()
             return len(rows) > 0
         finally:
@@ -263,11 +312,11 @@ class MySQLUser(ResourceProvider):
             log.info('drop database of %s', self.user)
             cursor = self.connection.cursor()
             try:
-                cursor.execute('DROP DATABASE %s' % self.mysql_user)
+                cursor.execute('DROP DATABASE %s' % self.mysql_user(self.user))
             finally:
                 cursor.close()
         else:
-            log.info('not dropping database %s', self.mysql_user)
+            log.info('not dropping database %s', self.mysql_user(self.user))
 
     def is_5_7_or_higher(self):
         cursor = self.connection.cursor()
@@ -300,7 +349,7 @@ class MySQLUser(ResourceProvider):
         cursor = self.connection.cursor()
         try:
             cursor.execute('CREATE USER %s@%s IDENTIFIED BY %s', [
-                self.mysql_user, self.mysql_user_host, self.user_password])
+                self.mysql_user(self.user), self.mysql_user_host(self.user), self.user_password])
         finally:
             cursor.close()
 
@@ -308,7 +357,7 @@ class MySQLUser(ResourceProvider):
         log.info('create database %s', self.user)
         cursor = self.connection.cursor()
         try:
-            cursor.execute("CREATE DATABASE %s" % self.mysql_user)
+            cursor.execute("CREATE DATABASE %s" % self.mysql_user(self.user))
         finally:
             cursor.close()
 
@@ -317,7 +366,7 @@ class MySQLUser(ResourceProvider):
         cursor = self.connection.cursor()
         try:
             cursor.execute("GRANT ALL ON %s.* TO '%s'@'%s' WITH GRANT OPTION" %
-                           (self.mysql_user, self.mysql_user, self.mysql_user_host))
+                           (self.mysql_user(self.user), self.mysql_user(self.user), self.mysql_user_host(self.user)))
         finally:
             cursor.close()
 
@@ -340,10 +389,42 @@ class MySQLUser(ResourceProvider):
                 self.create_database()
                 self.grant_ownership()
 
+    def to_sql_format(self, grants):
+        return ','.join(grants)
+
+    def grant_user(self):
+        cursor = self.connection.cursor()
+        try:
+            if self.with_grant_option:
+                query = "GRANT %s ON %s TO '%s'@'%s' WITH GRANT OPTION" % (
+                    self.to_sql_format(self.grant), self.grant_on,
+                    self.mysql_user(self.user), self.mysql_user_host(self.user)
+                )
+            else:
+                query = "GRANT %s ON %s TO '%s'@'%s'" % (
+                    self.to_sql_format(self.grant), self.grant_on,
+                    self.mysql_user(self.user), self.mysql_user_host(self.user)
+                )
+
+            cursor.execute(query)
+        finally:
+            cursor.close()
+
+    def revoke_user_old(self):
+        cursor = self.connection.cursor()
+        try:
+            query = "REVOKE %s ON %s FROM '%s'@'%s'" % (
+                self.to_sql_format(self.grant_old), self.grant_on_old,
+                self.mysql_user(self.user_old), self.mysql_user_host(self.user_old))
+            cursor.execute(query)
+        finally:
+            cursor.close()
+
     def create(self):
         try:
             self.connect()
             self.create_user()
+            self.grant_user()
             self.physical_resource_id = self.url
         except Exception as e:
             self.physical_resource_id = 'could-not-create'
@@ -352,12 +433,24 @@ class MySQLUser(ResourceProvider):
             self.close()
 
     def update(self):
+        if (self.dbname != self.dbname_old or
+            self.user != self.user_old or
+            self.grant_on != self.grant_on_old):
+            # Major change, recreate..
+            return self.create()
+
+        if (self.grant_on == self.grant_on_old and
+            self.grant == self.grant_old and
+            self.with_grant_option == self.with_grant_option_old):
+            # Unchanged, nothing to do..
+           return
+
         try:
             self.connect()
             if self.allow_update:
                 self.update_password()
-            else:
-                self.fail('Only the password of %s can be updated' % self.user)
+                self.revoke_user_old()
+                self.grant_user()
         except Exception as e:
             self.fail('Failed to update the user, %s' % e)
         finally:
