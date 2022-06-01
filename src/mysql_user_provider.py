@@ -253,9 +253,9 @@ class MySQLUser(ResourceProvider):
     @property
     def url(self):
         if self.with_database:
-            return 'mysql:%s:%s:%s:%s:%s:%s' % (self.host, self.port, self.dbname, self.mysql_user(self.user), self.user, self.grant_on)
+            return 'mysql:%s:%s:%s:%s:%s' % (self.host, self.port, self.dbname, self.mysql_user(self.user), self.user)
         else:
-            return 'mysql:%s:%s:%s::%s:%s' % (self.host, self.port, self.dbname, self.user, self.grant_on)
+            return 'mysql:%s:%s:%s::%s' % (self.host, self.port, self.dbname, self.user)
 
     def connect(self):
         log.info('connecting to database %s on port %d as user %s', self.host, self.port, self.dbowner)
@@ -434,9 +434,10 @@ class MySQLUser(ResourceProvider):
 
     def update(self):
         if (self.dbname != self.dbname_old or
-            self.user != self.user_old or
-            self.grant_on != self.grant_on_old):
+            self.user != self.user_old):
             # Major change, recreate..
+            # Triggers a DELETE of the old resource
+            # after creation of the new is complete
             return self.create()
 
         if (self.grant_on == self.grant_on_old and
