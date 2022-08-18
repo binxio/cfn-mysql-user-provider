@@ -73,7 +73,7 @@ def test_invalid_user_name(database_port):
 def test_password_with_special_chars(database_port):
     name = 'u%s' % str(uuid.uuid4()).replace('-', '')[:14]
     event = Event('Create', name, with_database=False, port=database_port)
-    event['ResourceProperties']['Password'] = "abd'\efg~"
+    event['ResourceProperties']['Password'] = "abd'\\efg~"
     response = handler(event, {})
     assert response['Status'] == 'SUCCESS', response['Reason']
 
