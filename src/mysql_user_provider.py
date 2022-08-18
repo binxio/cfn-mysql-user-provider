@@ -274,7 +274,7 @@ class MySQLUser(ResourceProvider):
         try:
             cursor.execute('select version()')
             version = cursor.fetchone()[0].split('.')
-            return int(version[0]) >= 5 and int(version[1]) >= 7
+            return int(version[0]) > 5 or (int(version[0]) == 5 and int(version[1]) >= 7)
         except Exception as e:
             self.fail('failed to determine database version, {}'.format(e))
             raise e

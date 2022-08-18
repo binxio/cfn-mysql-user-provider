@@ -1,11 +1,12 @@
 include Makefile.mk
 
 NAME=cfn-mysql-user-provider
-AWS_REGION=eu-central-1
+AWS_REGION=$(shell aws configure get region)
+ALL_REGIONS=$(shell aws ec2 describe-regions --query 'join(`\n`,Regions[*].RegionName)' --output text | grep -v '^$(AWS_REGION)$$')
+
 S3_BUCKET_PREFIX=binxio-public
 S3_BUCKET=$(S3_BUCKET_PREFIX)-$(AWS_REGION)
 
-ALL_REGIONS=$(shell printf "import boto3\nprint('\\\n'.join(map(lambda r: r['RegionName'], boto3.client('ec2').describe_regions()['Regions'])))\n" | python | grep -v '^$(AWS_REGION)$$')
 
 help:
 	@echo 'make                 - builds a zip file to target/.'
@@ -18,6 +19,7 @@ help:
 	@echo 'make delete-provider - deletes the provider.'
 	@echo 'make demo            - deploys the provider and the demo cloudformation stack.'
 	@echo 'make delete-demo     - deletes the demo cloudformation stack.'
+	@echo 'make deploy-pipeline - deploys the cicd pipeline.'
 
 deploy: target/$(NAME)-$(VERSION).zip
 	aws s3 --region $(AWS_REGION) \
@@ -55,7 +57,7 @@ target/$(NAME)-$(VERSION).zip: src/*.py requirements.txt
 		chmod ugo+r target/$(NAME)-$(VERSION).zip
 
 venv: requirements.txt
-	virtualenv -p python3 venv  && \
+	virtualenv -p python3.9 venv  && \
 	. ./venv/bin/activate && \
 	pip install --quiet --upgrade pip && \
 	pip install --quiet -r requirements.txt 
@@ -129,3 +131,10 @@ delete-demo:
 	aws cloudformation delete-stack --stack-name $(NAME)-demo
 	aws cloudformation wait stack-delete-complete  --stack-name $(NAME)-demo
 
+deploy-pipeline:
+	aws cloudformation deploy \
+                --capabilities CAPABILITY_IAM \
+                --stack-name $(NAME)-pipeline \
+                --template-file ./cloudformation/cicd-pipeline.yaml \
+                --parameter-overrides \
+                        S3BucketPrefix=$(S3_BUCKET_PREFIX)

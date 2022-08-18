@@ -59,7 +59,7 @@ class Event(dict):
             raise
         return result
 
-database_ports = [6033, 7033]
+database_ports = [8033]
 
 
 @pytest.mark.parametrize("database_port", database_ports)
