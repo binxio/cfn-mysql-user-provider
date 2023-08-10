@@ -1,5 +1,5 @@
 boto3
 mysql-connector-python
 requests
-jsonschema
+jsonschema==4.17.3
 cfn_resource_provider>=1.0.6
