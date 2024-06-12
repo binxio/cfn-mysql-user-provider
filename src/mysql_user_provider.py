@@ -8,6 +8,7 @@ from hashlib import sha1
 import mysql.connector
 from botocore.exceptions import ClientError
 from cfn_resource_provider import ResourceProvider
+from mysql.connector import Error
 
 log = logging.getLogger()
 log.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
@@ -195,7 +196,8 @@ class MySQLUser(ResourceProvider):
     @property
     def connect_info(self):
         return {'host': self.host, 'port': self.port, 'database': self.dbname,
-                'user': self.dbowner, 'password': self.dbowner_password}
+                'user': self.dbowner, 'password': self.dbowner_password,
+                'connection_timeout': 2}
 
     @property
     def allow_update(self):
@@ -212,8 +214,11 @@ class MySQLUser(ResourceProvider):
         log.info('connecting to database %s on port %d as user %s', self.host, self.port, self.dbowner)
         try:
             self.connection = mysql.connector.connect(**self.connect_info)
-        except Exception as e:
-            raise ValueError('Failed to connect, %s' % e)
+            if self.connection.is_connected():
+                print("Connected to MySQL database.")
+        except Error as e:
+            print("Error while connecting to MySQL", e)
+            raise ValueError('"Error while connecting to MySQL {}'.format(e))
 
     def close(self):
         if self.connection:
