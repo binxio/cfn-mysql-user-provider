@@ -1,5 +1,7 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudFormation Custom MySQL User Provider
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: CloudFormation Custom MySQL User Provider SAM APP
+
 Parameters:
   VPC:
     Type: AWS::EC2::VPC::Id
@@ -9,11 +11,13 @@ Parameters:
     Type: AWS::EC2::SecurityGroup::Id
   LambdaS3Bucket:
     Type: String
-    Default: ''
+    Default: ""
+
 Conditions:
   UsePublicBucket: !Equals
-    - !Ref 'LambdaS3Bucket'
-    - ''
+    - !Ref "LambdaS3Bucket"
+    - ""
+
 Resources:
   LambdaPolicy:
     Type: AWS::IAM::Policy
@@ -22,32 +26,33 @@ Resources:
     Properties:
       PolicyName: CFNCustomDBUserProviderPolicy
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Action:
               - ssm:GetParameter
-              - secretsmanager:GetSecretValue
+              - ssm:PutParameter
             Resource:
-              - '*'
+              - "*"
           - Effect: Allow
             Action:
               - kms:Decrypt
             Resource:
-              - '*'
+              - "*"
           - Action:
               - logs:*
             Resource: arn:aws:logs:*:*:*
             Effect: Allow
       Roles:
-        - !Ref 'LambdaRole'
+        - !Ref "LambdaRole"
+
   LambdaRole:
     Type: AWS::IAM::Role
     Properties:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Action:
               - sts:AssumeRole
@@ -55,24 +60,18 @@ Resources:
             Principal:
               Service:
                 - lambda.amazonaws.com
+
   CFNDBUserProvider:
-    Type: AWS::Lambda::Function
-    DependsOn:
-      - LambdaRole
+    Type: AWS::Serverless::Function
     Properties:
       Description: CloudFormation Custom:MySQLUser implementation
-      Code:
-        S3Bucket: !If
-          - UsePublicBucket
-          - !Sub 'binxio-public-${AWS::Region}'
-          - !Ref 'LambdaS3Bucket'
-        S3Key: lambdas/cfn-mysql-user-provider-1.0.1.zip
+      CodeUri: ./src
       VpcConfig:
         SecurityGroupIds:
-          - !Ref 'SecurityGroup'
-        SubnetIds: !Ref 'Subnets'
-      FunctionName: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:binxio-cfn-mysql-user-provider-${VPC}'
+          - !Ref "SecurityGroup"
+        SubnetIds: !Ref "Subnets"
+      FunctionName: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:binxio-cfn-mysql-user-provider-${VPC}"
       Handler: mysql_user_provider.handler
       MemorySize: 128
-      Role: !GetAtt 'LambdaRole.Arn'
+      Role: !GetAtt "LambdaRole.Arn"
       Runtime: python3.9

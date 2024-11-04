@@ -1,0 +1,18 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "cfn-mysql-user-custom-provider"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "SecurityGroup=sg-eb515a93 VPC=vpc-003c079935a04c784 Subnets=subnet-12a9314a,subnet-6dc53f51,subnet-425f1d34"
+
+[dev]
+[dev.deploy]
+[dev.deploy.parameters]
+stack_name = "cfn-mysql-user-custom-provider"
+region = "us-east-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "SecurityGroup=sg-0a6f0ba8fb870173c VPC=vpc-003c079935a04c784 Subnets=subnet-0cfd30d5b0e0a3333,subnet-087c536bcf0909809"
