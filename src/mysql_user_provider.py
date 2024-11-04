@@ -1,4 +1,4 @@
-import logging
+mport logging
 import os
 
 import random
@@ -16,36 +16,40 @@ request_schema = {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "type": "object",
     "oneOf": [
-        {"required": ["Database", "User", "Password"]},
         {"required": ["Database", "User", "PasswordParameterName"]},
-        {"required": ["Database", "User", "PasswordSecretName"]}
+        {"required": ["Database", "User", "UseIamAuth"]}
     ],
     "properties": {
         "Database": {"$ref": "#/definitions/connection"},
         "User": {
             "type": "string",
-            "pattern": "^[_$A-Za-z][A-Za-z0-9_$]*(@[.A-Za-z0-9%_$\\-]+)?$",
             "maxLength": 32,
             "description": "the user to create"
-        },
-        "Password": {
-            "type": "string",
-            "maxLength": 32,
-            "description": "the password for the user"
         },
         "PasswordParameterName": {
             "type": "string",
             "minLength": 1,
             "description": "the name of the password in the Parameter Store."
         },
-        "PasswordSecretName": {
-            "type": "string",
-            "minLength": 1,
-            "description": "the name of the password in the Secret Manager."
+        "UseIamAuth": {
+            "type": "boolean",
+            "description": "Use IAM auth instead of a password"
+        },
+        "GlobalUserPermisions": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "UserPermissions": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
         },
         "WithDatabase": {
             "type": "boolean",
-            "default": True,
+            "default": "True",
             "description": "create a database with the same name, or only a user"
         },
         "DeletionPolicy": {
@@ -58,9 +62,7 @@ request_schema = {
         "connection": {
             "type": "object",
             "oneOf": [
-                {"required": ["DBName", "Host", "Port", "User", "Password"]},
-                {"required": ["DBName", "Host", "Port", "User", "PasswordParameterName"]},
-                {"required": ["DBName", "Host", "Port", "User", "PasswordSecretName"]}
+                {"required": ["DBName", "Host", "Port", "User", "PasswordParameterName"]}
             ],
             "properties": {
                 "DBName": {
@@ -82,18 +84,9 @@ request_schema = {
                     "maxLength": 32,
                     "description": "the username of the database owner"
                 },
-                "Password": {
-                    "type": "string",
-                    "maxLength": 32,
-                    "description": "the password of the database owner"
-                },
                 "PasswordParameterName": {
                     "type": "string",
                     "description": "the name of the database owner password in the Parameter Store."
-                },
-                "PasswordSecretName": {
-                    "type": "string",
-                    "description": "the name of the database owner password in the Secrets Manager."
                 }
             }
         }
@@ -118,7 +111,6 @@ class MySQLUser(ResourceProvider):
     def __init__(self):
         super(MySQLUser, self).__init__()
         self.ssm = boto3.client('ssm')
-        self.secretsmanager = boto3.client('secretsmanager')
         self.connection = None
         self.request_schema = request_schema
 
@@ -127,37 +119,51 @@ class MySQLUser(ResourceProvider):
 
     def get_password(self, name):
         try:
-            if 'PasswordParameterName' in self.properties:
-                response = self.ssm.get_parameter(Name=name, WithDecryption=True)
+            log.info("Getting password from SSM using key: %s", name)
+            response = self.ssm.get_parameter(Name=name, WithDecryption=True)
+            if response['Parameter']['Value']:
                 return response['Parameter']['Value']
-            else: 
-                response = self.secretsmanager.get_secret_value(SecretId=name)
-                return response['SecretString']
+            else:
+                log.info("No password found")
         except ClientError as e:
             raise ValueError('Could not obtain password using name {}, {}'.format(name, e))
 
+    def set_password(self, name):
+        try:
+            log.info("Setting password for new user in parameter store key: %s", name)
+            response = self.ssm.put_parameter(
+                Name=name, 
+                Description='MySQL Password', 
+                Value=mysql_password(''.join(random.choices(string.ascii_uppercase + string.digits, k=16))), 
+                Type='SecureString')
+        except ClientError as e:
+            raise ValueError('Could not set password using name {}, {}'.format(name, e))
+
     @property
     def user_password(self):
-        if 'Password' in self.properties:
-            return self.get('Password')
-        elif 'PasswordParameterName' in self.properties:
-            return self.get_password(self.get('PasswordParameterName'))
-        else:
-            return self.get_password(self.get('PasswordSecretName'))
+        self.set_password(self.get('PasswordParameterName'))
+        return self.get_password(self.get('PasswordParameterName'))
 
     @property
     def dbowner_password(self):
         db = self.get('Database')
-        if 'Password' in db:
-            return db.get('Password')
-        elif 'PasswordParameterName' in db:
-            return self.get_password(db['PasswordParameterName'])
-        else:
-            return self.get_password(db['PasswordSecretName'])
+        return self.get_password(db['PasswordParameterName'])
 
     @property
     def user(self):
         return self.get('User')
+
+    @property
+    def use_iam_auth(self):
+        return self.get("UseIamAuth", False)
+
+    @property
+    def global_user_permissions(self):
+        return ", ".join(self.get("GlobalUserPermissions", []))
+    
+    @property
+    def user_permissions(self):
+        return ", ".join(self.get("UserPermissions", []))
 
     @property
     def mysql_user(self):
@@ -212,7 +218,9 @@ class MySQLUser(ResourceProvider):
         log.info('connecting to database %s on port %d as user %s', self.host, self.port, self.dbowner)
         try:
             self.connection = mysql.connector.connect(**self.connect_info)
+            log.info("Connected")
         except Exception as e:
+            log.info("Connection failed: %s", e)
             raise ValueError('Failed to connect, %s' % e)
 
     def close(self):
@@ -286,8 +294,12 @@ class MySQLUser(ResourceProvider):
         cursor = self.connection.cursor()
         try:
             if self.is_5_7_or_higher():
-                cursor.execute("ALTER USER %s IDENTIFIED BY %s ACCOUNT UNLOCK", [
-                    self.user, self.user_password])
+                if self.use_iam_auth:
+                    cursor.execute("ALTER USER %s IDENTIFIED WITH AWSAuthenticationPlugin AS 'RDS' ACCOUNT UNLOCK", [
+                        self.user])
+                else:
+                    cursor.execute("ALTER USER %s IDENTIFIED BY %s ACCOUNT UNLOCK", [
+                        self.user, self.user_password])
             else:
                 cursor.execute("SET PASSWORD FOR %s = %s", [
                     self.user, mysql_password(self.user_password)])
@@ -299,8 +311,30 @@ class MySQLUser(ResourceProvider):
 
         cursor = self.connection.cursor()
         try:
-            cursor.execute('CREATE USER %s@%s IDENTIFIED BY %s', [
-                self.mysql_user, self.mysql_user_host, self.user_password])
+            if self.use_iam_auth:
+                log.info("Create with IAM Auth")
+                cursor.execute("CREATE USER %s@%s IDENTIFIED WITH AWSAuthenticationPlugin AS 'RDS'", [
+                    self.mysql_user, self.mysql_user_host])
+            else:
+                log.info("Create with password")
+                cursor.execute('CREATE USER %s@%s IDENTIFIED BY %s', [
+                    self.mysql_user, self.mysql_user_host, self.user_password])
+        finally:
+            cursor.close()
+
+    def grant_permissions(self):
+        cursor = self.connection.cursor()
+        try:
+            if self.user_permissions:
+                grant_query = f"""GRANT {self.user_permissions} ON `{self.dbname}`.* TO '{self.mysql_user}'@'{self.mysql_user_host}'"""
+                log.info("Grant Query: %s", grant_query)
+                cursor.execute(grant_query)
+                log.info("local permissions granted")
+            if self.global_user_permissions:
+                grant_query = f"""GRANT {self.global_user_permissions} ON *.* TO '{self.mysql_user}'@'{self.mysql_user_host}'"""
+                log.info("Grant Query: %s", grant_query)
+                cursor.execute(grant_query)
+                log.info("global permissions granted")
         finally:
             cursor.close()
 
@@ -330,8 +364,10 @@ class MySQLUser(ResourceProvider):
     def create_user(self):
         if self.user_exists():
             self.update_password()
+            self.grant_permissions()
         else:
             self.do_create_user()
+            self.grant_permissions()
 
         if self.with_database:
             if self.db_exists():
@@ -356,6 +392,7 @@ class MySQLUser(ResourceProvider):
             self.connect()
             if self.allow_update:
                 self.update_password()
+                self.grant_permissions()
             else:
                 self.fail('Only the password of %s can be updated' % self.user)
         except Exception as e:
@@ -381,5 +418,7 @@ provider = MySQLUser()
 
 
 def handler(request, context):
+    log.info("Request received: %s", request)
     return provider.handle(request, context)
     
+
