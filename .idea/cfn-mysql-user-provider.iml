@@ -11,7 +11,7 @@
       <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.6 (cfn-mysql-user-provider)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Pipenv (cfn-mysql-user-provider)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Python 3.6 (system) interpreter library" level="application" />
   </component>

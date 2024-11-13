@@ -1,0 +1,31 @@
+#!/bin/bash
+# NAME
+#    get-default-security-group - get AWS default security group for the VPC
+#
+get_default_security_group() {
+    aws ec2 describe-security-groups \
+      --group-names default  \
+      --filters Name=vpc-id,Values=$1 \
+      --query "SecurityGroups[*].GroupId" \
+      --output text
+}
+
+
+get_default_vpc() {
+        aws ec2 describe-vpcs --filter Name=is-default,Values=true --query 'Vpcs[*].VpcId' --output text
+}
+
+
+main() {
+  local vpc_id=$1
+
+  if [[ -z $vpc_id ]]; then
+      vpc_id=$(get_default_vpc)
+  fi
+
+  [[ -z $vpc_id ]] && echo "ERROR: no vpc specified and no default vpc found" >&2 && return 1
+
+  get_default_security_group $vpc_id
+}
+
+main "$@"

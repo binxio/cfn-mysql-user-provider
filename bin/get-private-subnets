@@ -1,0 +1,41 @@
+#!/bin/bash
+# NAME
+#    get-private-subnets - get AWS private subnet ids for VPC, sorted by az
+#
+get_private_subnets() {
+        subnets=$(
+            aws ec2 describe-route-tables \
+                --filters Name=vpc-id,Values=$1 \
+                --query 'join(`\n`, RouteTables[?Routes[?GatewayId == null]].Associations[].SubnetId)' \
+                --output text)
+
+        if [[ -z $subnets ]]; then
+                # echo "INFO: no private subnets found">&2
+                return
+        fi
+
+        aws ec2 describe-subnets \
+                --filter Name=subnet-id,Values=$(sed -e 's/  */,/g'  <<< $subnets) \
+                --query 'join(`,`, sort_by(Subnets,&AvailabilityZone)[*].SubnetId)' \
+                --output text
+}
+
+
+get_default_vpc() {
+        aws ec2 describe-vpcs --filter Name=is-default,Values=true --query 'Vpcs[*].VpcId' --output text
+}
+
+
+main() {
+  local vpc_id=$1
+
+  if [[ -z $vpc_id ]]; then
+      vpc_id=$(get_default_vpc)
+  fi
+
+  [[ -z $vpc_id ]] && echo "ERROR: no vpc specified and no default vpc found" >&2 && return 1
+
+  get_private_subnets $vpc_id
+}
+
+main "$@"

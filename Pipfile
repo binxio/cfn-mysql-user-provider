@@ -1,0 +1,18 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[packages]
+boto3 = "*"
+mysql-connector-python = "*"
+requests = "*"
+jsonschema = "*"
+cfn_resource_provider = ">=1.0.6"
+
+[dev-packages]
+awscli = "*"
+pytest = "*"
+
+[requires]
+python_version = "3.9"

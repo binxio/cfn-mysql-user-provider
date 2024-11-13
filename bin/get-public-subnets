@@ -1,0 +1,53 @@
+#!/bin/bash
+# NAME
+#    get-public-subnets - get AWS public subnet id for VPC, sorted by az
+#
+get_public_subnets() {
+        subnets=$(aws ec2 describe-subnets \
+                --filters Name=vpc-id,Values=$1  \
+                --query 'join(`\n`, Subnets[*].SubnetId)' \
+                --output text)
+
+        values=$(
+                for id in $subnets; do
+                        rt=$(aws ec2 describe-route-tables \
+                                --filters Name=association.subnet-id,Values=$id \
+                                --query 'join(`\n`, RouteTables[*].RouteTableId)' \
+                                --output text)
+                        if [[ -z $rt ]]; then
+                                # if there is no route table, it used the default route table.
+                                echo $id
+                        fi
+                done
+        )
+
+        if [[ -z $values ]]; then
+                # echo "INFO: no subnets with igw associations found">&2
+                return
+        fi
+
+        aws ec2 describe-subnets \
+                --filter Name=subnet-id,Values=$(sed -e 's/  */,/g'  <<< $values) \
+                --query 'join(`,`, sort_by(Subnets,&AvailabilityZone)[*].SubnetId)' \
+                --output text
+}
+
+
+get_default_vpc() {
+        aws ec2 describe-vpcs --filter Name=is-default,Values=true --query 'Vpcs[*].VpcId' --output text
+}
+
+
+main() {
+  local vpc_id=$1
+
+  if [[ -z $vpc_id ]]; then
+      vpc_id=$(get_default_vpc)
+  fi
+
+  [[ -z $vpc_id ]] && echo "ERROR: no vpc specified and no default vpc found" >&2 && return 1
+
+  get_public_subnets $vpc_id
+}
+
+main "$@"

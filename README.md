@@ -63,7 +63,7 @@ aws cloudformation wait stack-create-complete  --stack-name cfn-mysql-user-provi
 Note that this uses the default VPC, subnet and security group. As the Lambda functions needs to connect to the database. You will need to 
 install this custom resource provider for each vpc that you want to be able to create database users.
 
-This CloudFormation template will use our pre-packaged provider from `s3://binxio-public/lambdas/cfn-mysql-user-provider-1.0.1.zip`.
+This CloudFormation template will use our pre-packaged provider from `463637877380.dkr.ecr.eu-central-1.amazonaws.com/xebia/cfn-mysql-user-provider:0.0.0`.
 
 If you have not done so, please install the secret provider too.
 

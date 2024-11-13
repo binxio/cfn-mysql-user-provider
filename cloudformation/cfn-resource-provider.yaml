@@ -6,14 +6,7 @@ Parameters:
   Subnets:
     Type: List<AWS::EC2::Subnet::Id>
   SecurityGroup:
-    Type: AWS::EC2::SecurityGroup::Id
-  LambdaS3Bucket:
     Type: String
-    Default: ''
-Conditions:
-  UsePublicBucket: !Equals
-    - !Ref 'LambdaS3Bucket'
-    - ''
 Resources:
   LambdaPolicy:
     Type: AWS::IAM::Policy
@@ -61,18 +54,13 @@ Resources:
       - LambdaRole
     Properties:
       Description: CloudFormation Custom:MySQLUser implementation
+      PackageType: Image
       Code:
-        S3Bucket: !If
-          - UsePublicBucket
-          - !Sub 'binxio-public-${AWS::Region}'
-          - !Ref 'LambdaS3Bucket'
-        S3Key: lambdas/cfn-mysql-user-provider-1.0.1.zip
+        ImageUri: 463637877380.dkr.ecr.eu-central-1.amazonaws.com/xebia/cfn-mysql-user-provider:1.0.1-8b482f8-dirty
       VpcConfig:
         SecurityGroupIds:
           - !Ref 'SecurityGroup'
         SubnetIds: !Ref 'Subnets'
       FunctionName: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:binxio-cfn-mysql-user-provider-${VPC}'
-      Handler: mysql_user_provider.handler
       MemorySize: 128
       Role: !GetAtt 'LambdaRole.Arn'
-      Runtime: python3.9

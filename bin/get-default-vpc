@@ -1,0 +1,5 @@
+#!/bin/bash
+# NAME
+#    get-default-vpc - returns the default VPC id
+#
+aws ec2 describe-vpcs --filter Name=is-default,Values=true --query 'Vpcs[*].VpcId' --output text
