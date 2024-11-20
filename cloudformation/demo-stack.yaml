@@ -92,6 +92,10 @@ Resources:
       - KongReaderPassword
     Properties:
       User: kongreader
+      Grant:
+      - 'SELECT'
+      GrantOn: 'root.*'
+      WithGrantOption: false
       WithDatabase: false
       PasswordParameterName: !Sub '/${AWS::StackName}/mysql/kongreader/PGPASSWORD'
       Database:
