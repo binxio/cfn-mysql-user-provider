@@ -1,4 +1,5 @@
 import logging
+import json
 import os
 
 import random
@@ -132,7 +133,19 @@ class MySQLUser(ResourceProvider):
                 return response['Parameter']['Value']
             else: 
                 response = self.secretsmanager.get_secret_value(SecretId=name)
-                return response['SecretString']
+                return json.loads(response['SecretString'])['password']
+        except ClientError as e:
+            raise ValueError('Could not obtain password using name {}, {}'.format(name, e))
+
+    def get_password_dbowner(self, name):
+        try:
+            db = self.get('Database')
+            if 'PasswordParameterName' in db:
+                response = self.ssm.get_parameter(Name=name, WithDecryption=True)
+                return response['Parameter']['Value']
+            else:
+                response = self.secretsmanager.get_secret_value(SecretId=name)
+                return json.loads(response['SecretString'])['password']
         except ClientError as e:
             raise ValueError('Could not obtain password using name {}, {}'.format(name, e))
 
@@ -151,9 +164,9 @@ class MySQLUser(ResourceProvider):
         if 'Password' in db:
             return db.get('Password')
         elif 'PasswordParameterName' in db:
-            return self.get_password(db['PasswordParameterName'])
+            return self.get_password_dbowner(db['PasswordParameterName'])
         else:
-            return self.get_password(db['PasswordSecretName'])
+            return self.get_password_dbowner(db['PasswordSecretName'])
 
     @property
     def user(self):
