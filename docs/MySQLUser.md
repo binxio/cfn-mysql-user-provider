@@ -9,6 +9,9 @@ To declare this entity in your AWS CloudFormation template, use the following sy
 Type: Custom::MySQLUser
 Properties:
   User: STRING
+  Grant: [STRING]
+  GrantOn: STRING
+  WithGrantOption: true|false
   Password: STRING
   PasswordParameterName: STRING
   PasswordSecretName: STRING
@@ -40,6 +43,9 @@ For MySQL versions below 5.7, the provider locks the user out be generating a ra
 You can specify the following properties:
 
 - `User` - to create
+- `Grant` - the privileges to grant
+- `GrantOn` - the privilege level to grant, use . for global grants. Update requires replacement.
+- `WithGrantOption` - if the user is allowed to grant others, defaults to false
 - `Password` - of the user 
 - `PasswordParameterName` - name of the ssm parameter containing the password of the user
 - `PasswordSecretName` - friendly name or the ARN of the secret in secrets manager containing the password of the user
