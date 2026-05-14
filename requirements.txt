@@ -3,3 +3,7 @@ mysql-connector-python
 requests
 jsonschema==4.17.3
 cfn_resource_provider>=1.0.6
+# urllib3 v2.x dropped Python <3.10 support and uses PEP 604 union syntax
+# (`bytes | str`) which crashes at import time on Lambda runtimes built
+# against older Pythons. Cap below 2.0 until this repo requires Py3.10+.
+urllib3<2
